@@ -1,0 +1,6 @@
+[submodule "hazelcast"]
+	path = hazelcast
+	url = https://github.com/zpqrtbnk/hazelcast
+[submodule "hazelcast-csharp-client"]
+	path = hazelcast-csharp-client
+	url = https://github.com/zpqrtbnk/hazelcast-csharp-client
