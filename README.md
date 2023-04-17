@@ -1,34 +1,46 @@
 
 # .NET Jet
 
-A .NET Jet solution is composed of four moving parts:
+A solution that allows users to run .NET transformations as part of a Jet pipeline,
+by forking a .NET process and passing tasks between Java and .NET using a fast
+shared-memory IPC mechanism.
+
+From a high-level standpoint, this solution relies on:
 
 * A `hazelcast-jet-dotnet` Java module that provides the Java-side plumbing
 * A `Hazelcast.Net.Jet` .NET package that provides the .NET-side plumbing
 * A .NET application that implements the .NET-side pipeline stage
 * A Java application that defines the pipeline and submits it to the cluster
 
-git clone --recurse-submodules https://github.com/chaconinc/MainProject
-
 ## Demonstration
 
-Clone this repository, including its submodules:
+### Clone this repository
+Including its submodules:
 ```sh
 git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jet-dotnet
 ```
 
-Build and pack the .NET client:
+### Build and pack the .NET client
 (once stable, this step would *not* be required)
 ```sh
 cd hazelcast-csharp-client
 pwsh ./hz.ps1 build,pack-nuget
 ```
 
-Build the Hazelcast:
+### Build Hazelcast
 (once stable, this step would *not* be required)
-(good luck with this)
+(current module code for dotnet does not pass style checks)
+```sh
+mvn install -DskipTests -Dcheckstyle.skip=true
+```
 
-Build and publish the .NET service:
+And unzip the distribution
+(we're going to need scripts)
+```sh
+unzip hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT.zip -d temp/hazelcast-5.3.0-SNAPSHOT
+```
+
+#### Build and publish the .NET service
 ```sh
 cd dotnet-service
 dotnet build
@@ -38,17 +50,79 @@ dotnet publish -c Release -r win-x64 -o target-sc/linux-x64 --self-contained
 dotnet publish -c Release -r win-x64 -o target/linux-x64 --no-self-contained
 ```
 
-Build the Java pipeline definition:
+### Build the Java pipeline definition
 ```sh
 cd java-pipeline
 mvn package
 ```
 
-Submit the 
-```sh
-hz-cli [options] $HZJAVA/extensions/dotnet/target/hazelcast-jet-dotnet-5.3.0-SNAPSHOT.jar \
-                 -d dotnet-service/target-sc -x service
+### Prepare a cluster
+You must have a cluster running with Jet and resource uploading being enabled.
+For the sake of the demo, a map `streamed-map` must be configured with journaling.
+For instance, the following member configuration file is appropriate:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<hazelcast xmlns="http://www.hazelcast.com/schema/config"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.hazelcast.com/schema/config
+           http://www.hazelcast.com/schema/config/hazelcast-config-5.0.xsd">
+
+  <cluster-name>dev</cluster-name>
+
+  <!-- we need jet with resources upload -->
+  <jet enabled="true" resource-upload-enabled="true"></jet>
+
+  <!-- we need a journaled map -->
+  <map name="streamed-map">
+    <event-journal enabled="true">
+      <capacity>5000</capacity>
+      <time-to-live-seconds>60</time-to-live-seconds>
+    </event-journal>
+  </map>
+
+</hazelcast>
 ```
+
+### Submit the pipeline job
+(for relative paths reasons in various places, be sure to be in the root directory)
+```sh
+temp/hazelcast-5.3.0-SNAPSHOT/bin/hz-cli [options] submit \
+    java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar \
+    -d dotnet-service/target-sc -x service
+```
+With [options] being the connection info to a running cluster. For instance it can be `-tdev@127.0.0.1:5701` or `-f hazelcast-client.yml`.
+
+You can then see the running job with:
+```sh
+temp/hazelcast-5.3.0-SNAPSHOT/bin/hz-cli [options] list-jobs
+```
+
+### Use the pipeline
+(replace the server address appropriately)
+```sh
+cd dotnet-example
+dotnet build
+dotnet run -- --hazelcast.clusteName=dev --hazelcast.networking.addresses.0=127.0.0.1:5701
+```
+
+You *should* see something like:
+```text
+Connect...
+Added entry: example-key-19 = SomeThing(Value=19)
+Client has 2 schemas:
+* typeName=other-thing id=-4539772739487884800
+    value String
+* typeName=some-thing id=5057135550981888295
+    value Int32
+
+Found result: example-key-19 = OtherThing(Value=__19__)
+```
+
+The added entry has been added to the `streamed-map` map, which has journaling enabled.
+Thanks to journaling, the pipeline triggers and passes the entry value (a `SomeThing` object with an integer `Value` property) to the .NET transformation, which returns a transformed entry (a `OtherThing` object with a string `Value` property). The pipeline inserts this entry into a `result-map` map.
+The example code then tries to find this entry in the map.
+
+**FIXME: rest of this document is mostly junk to be cleaned up**
 
 ## Java `hazelcast-jet-dotnet`
 
@@ -120,17 +194,6 @@ Submit
 ```sh
 hz-cli [options] submit path/to/submit.jar path/to/service
 ```
-
-## Demonstration
-
-Clone the `hazelcast-jet-dotnet` repository from `zpqrtbnk` with its submodules.
-
-In the `hazelcast` directory, which should contain the `hazelcast` repository, build.
-This will notably create the `hazelcast-jet-dotnet-5.3.0-SNAPSHOT.jar` in ??
-
-In the `hazelcast-csharp-client`, which should contain the `hazelcast-csharp-client` repository, build.
-
-Clone the `hazelcast-csharp-client` repository from `zpqrtbnk` and check out the `hazelcast-jet-dotnet` branch. Build (execute `./hz.ps1 build` from Powershell). This will notably create...
 
 ## Technical details
 
