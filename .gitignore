@@ -4,6 +4,7 @@ bin/
 /temp/
 /local/
 /.idea/
+/*/.idea/
 /.nuget/
 
 Thumbs.db

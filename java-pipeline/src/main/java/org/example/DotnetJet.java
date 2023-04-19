@@ -41,9 +41,11 @@ public class DotnetJet {
 
         // configure and submit the job
         JobConfig jobConfig = new JobConfig()
+                // until it is part of the distribution, we need to attach this jar
                 .addJar("hazelcast/extensions/dotnet/target/hazelcast-jet-dotnet-5.3.0-SNAPSHOT.jar")
+                // always include this class
                 .addClass(DotnetJet.class);
-        config.configureJob(jobConfig);
+        config.configureJob(jobConfig); // attaches the directories containing the dotnet exe, etc.
         Hazelcast.bootstrappedInstance().getJet().newJob(pipeline, jobConfig);
     }
 
