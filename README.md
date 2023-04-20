@@ -137,26 +137,19 @@ hz-cli -f viridian.yml submit \
 ```
 
 For now, we have two problems with Viridian
-* Don't know how to enable journaling for the `streamed-map`
-* Viridian fails to recreate the service directory = permission issue, will need a fix at Viridian platform level
-  (but fixed on our test cluster)
+* Don't know how to enable journaling for the `streamed-map` (maybe using dynamic config with something along `hazelcastInstance.getConfig().addMapConfig(myMapConfig)`) somewhere Java-side?
+* Viridian has some permission issues (reported, will be fixed) which prevents the correct re-creation of attached directories. However, once that is fixed, we have no permission to execute the .NET process, which seems logical.
 
-* cannot attach subdirectories, refactoring...
+So for now, we cannot run a demo on Viridian.
 
-
+Note: was (re) building and testing as:
+```sh
+export CLASSPATH=hazelcast/extensions/dotnet/target/hazelcast-jet-dotnet-5.3.0-SNAPSHOT.jar
 (cd hazelcast && mvn install -DskipTests -Dcheckstyle.skip=true)
 (cd java-pipeline && mvn package)
-hz-cle -v -f viridian.yml submit java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar -d dotnet-service/target-sc -x service
+hz-cli -f viridian.yml submit java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar -d dotnet-service/target-sc -x service
+```
 
-hz-cle -f hazelcast-client-with-ssl.yml submit /c/Users/sgay/Code/hazelcast-jet-dotnet/hazelcast/extensions/dotnet/tar
-get/hazelcast-jet-dotnet-5.3.0-SNAPSHOT.jar     -d /c/Users/sgay/Code/hazelcast-jet-dotnet/dotnet-service/target-sc
--x service
-
-WORKS??
-
-hz-cle -f hazelcast-client-with-ssl.yml submit /c/Users/sgay/Code/hazelcast-jet-dotnet/java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar -d /c/Users/sgay/Code/hazelcast-jet-dotnet/dotnet-service/target-sc -x service
-
-FAILS??
 
 **FIXME: rest of this document is mostly junk to be cleaned up**
 **FIXME: rest of this document is mostly junk to be cleaned up**
