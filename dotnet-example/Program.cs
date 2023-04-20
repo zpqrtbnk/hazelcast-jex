@@ -9,7 +9,29 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        
+        var viridianOptions = new HazelcastOptionsBuilder()
+            .With(args)
+            .With(o =>
+            {
+                // Your Viridian cluster name.
+                o.ClusterName = "pr-dblpuha6";
+                // Your discovery token and url to connect Viridian cluster.
+                o.Networking.Cloud.DiscoveryToken = "sRpToloYGAHHbMwmJ1amqV9lRTembAjkXIuWHj66iddvW1O3Ml";
+                o.Networking.Cloud.Url = new Uri("https://api.viridian.hazelcast.com");
+                // Enable metrics to see on Management Center.
+                o.Metrics.Enabled = true;
+                // Configure SSL.
+                o.Networking.Ssl.Enabled = true;
+                o.Networking.Ssl.ValidateCertificateChain = false;
+                o.Networking.Ssl.Protocol = SslProtocols.Tls12;
+                o.Networking.Ssl.CertificatePath = "viridian-client.pfx";
+                o.Networking.Ssl.CertificatePassword = "f804354890e";
+
+                // Register Compact serializer of City class.
+                //o.Serialization.Compact.AddSerializer(new CitySerializer());
+            })
+            .WithConsoleLogger()
+            .Build();
 
         var localOptions = new HazelcastOptionsBuilder()
             .With(args)
@@ -36,8 +58,9 @@ public class Program
 
         var options = localOptions;
 
-        Console.WriteLine("Connect...");
+        Console.WriteLine("Connect to cluster...");
         await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
+        Console.WriteLine("Connected");
 
         await using var sourceMap = await client.GetMapAsync<string, SomeThing>("streamed-map");
         await using var resultMap = await client.GetMapAsync<string, OtherThing>("result-map");
@@ -59,18 +82,20 @@ public class Program
         var random = Random.Shared.Next(100);
         var key = "example-key-" + random;
         var value = new SomeThing { Value = random };
+        Console.WriteLine($"Add entry to streamed-map: {key} = {value}");
         await sourceMap.SetAsync(key, value);
-        Console.WriteLine($"Added entry: {key} = {value}");
+        Console.WriteLine("Added");
 
         // FIXME DEBUGGING
-        Console.WriteLine(SchemaBuilder.ReportSchemas(client));
+        //Console.WriteLine(SchemaBuilder.ReportSchemas(client));
 
         // find value in result
+        Console.WriteLine($"wait for entry with key {key} to appear in result-map");
         OtherThing result;
         var maxAttempts = 30;
         while ((result = await resultMap.GetAsync(key)) == null && --maxAttempts > 0)
             await Task.Delay(1000);
 
-        Console.WriteLine(maxAttempts == 0 ? "Failed" : $"Found result: {key} = {result}");
+        Console.WriteLine(maxAttempts == 0 ? "Failed" : $"Found: {key} = {result}");
     }
 }

@@ -16,6 +16,7 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 (cd hazelcast && \
     $MVN install -DskipTests -Dcheckstyle.skip=true && \
     cd distribution/target && \
+    rm -rf hazelcast-5.3.0-SNAPSHOT && 
     unzip hazelcast-5.3.0-SNAPSHOT.zip)
 
 # build the dotnet service that runs the transform
@@ -31,7 +32,7 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
     $MVN package)
 
 # (ensure a standard Hazelcast 5.3 server is running)
-# eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config path/to/dotjet.xml
+# eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config java-pipeline/dotjet.xml
 
 # submit the job
 $CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
