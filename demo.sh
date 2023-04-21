@@ -35,7 +35,7 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 # eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config java-pipeline/dotjet.xml
 
 #temp
-exit
+#exit
 
 # submit the job
 $CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
