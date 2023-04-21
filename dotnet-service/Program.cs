@@ -43,16 +43,13 @@ public class Program
             return;
         }
 
-        // create the task
-        var jetTask = new JetTask<JetMessage<string, SomeThing>, JetMessage<string, OtherThing>>(TransformDoThing);
-        jetTask.BuildHazelcastOptions += BuildHazelcastOptions;
-
-        // create the server, and serve the task
+        // create the server, and serve the transformation
         await using var jetServer = new JetServer(pipeName, pipeCount);
-        await jetServer.Serve(jetTask);
+        jetServer.ConfigureOptions += ConfigureOptions;
+        await jetServer.Serve<JetMessage<string, SomeThing>, JetMessage<string, OtherThing>>(TransformDoThing);
     }
 
-    private static HazelcastOptionsBuilder BuildHazelcastOptions(HazelcastOptionsBuilder builder)
+    private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder)
     {
         return builder
 

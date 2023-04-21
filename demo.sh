@@ -34,6 +34,9 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 # (ensure a standard Hazelcast 5.3 server is running)
 # eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config java-pipeline/dotjet.xml
 
+#temp
+exit
+
 # submit the job
 $CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
     $DEMO/java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar \
@@ -41,14 +44,13 @@ $CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
     -x service
 
 # verify that the job runs
-$CLI -t$CLUSTERNAME@$CLUSTERADDR list-jobs
-
 # eg
 # ID                  STATUS             SUBMISSION TIME         NAME
 # 09bb-e6b6-a100-0001 RUNNING            2023-04-20T14:24:38.400 dotjet
-#
+$CLI -t$CLUSTERNAME@$CLUSTERADDR list-jobs
+
 # can cancel with
-#$CLI -t$CLUSTERNAME@$CLUSTERADDR cancel <ID>
+#$CLI -t$CLUSTERNAME@$CLUSTERADDR cancel $( $CLI -t$CLUSTERNAME@$CLUSTERADDR list-jobs|grep dotjet|cut -f1 -d\  )
 
 # run the example
 (cd dotnet-example && 

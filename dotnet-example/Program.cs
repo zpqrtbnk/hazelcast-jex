@@ -15,7 +15,7 @@ public class Program
 
         var options = BuildOptions(args);
         await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
-
+        
         Console.WriteLine("Connected");
 
         await using var sourceMap = await client.GetMapAsync<string, SomeThing>("streamed-map");
@@ -51,6 +51,29 @@ public class Program
 
     private static HazelcastOptions BuildOptions(String[] args)
     {
+        // return new HazelcastOptionsBuilder()
+        //     .With(args)
+        //     .With(o =>
+        //     {
+        //         // Your Viridian cluster name.
+        //         o.ClusterName = "pr-dblpuha6";
+        //         // Your discovery token and url to connect Viridian cluster.
+        //         o.Networking.Cloud.DiscoveryToken = "sRpToloYGAHHbMwmJ1amqV9lRTembAjkXIuWHj66iddvW1O3Ml";
+        //         o.Networking.Cloud.Url = new Uri("https://api.viridian.hazelcast.com");
+        //         // Enable metrics to see on Management Center.
+        //         o.Metrics.Enabled = true;
+        //         // Configure SSL.
+        //         o.Networking.Ssl.Enabled = true;
+        //         o.Networking.Ssl.ValidateCertificateChain = false;
+        //         o.Networking.Ssl.Protocol = SslProtocols.Tls12;
+        //         o.Networking.Ssl.CertificatePath = "viridian-client.pfx";
+        //         o.Networking.Ssl.CertificatePassword = "f804354890e";
+
+        //         // Register Compact serializer of City class.
+        //         //o.Serialization.Compact.AddSerializer(new CitySerializer());
+        //     })
+        //     .WithConsoleLogger()
+        //     .Build();
 
         return new HazelcastOptionsBuilder()
             .With(args)

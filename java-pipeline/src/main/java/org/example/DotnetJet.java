@@ -34,7 +34,7 @@ public class DotnetJet {
                 .readFrom(Sources.mapJournal("streamed-map", JournalInitialPosition.START_FROM_CURRENT))
                 .withIngestionTimestamps()
 
-                .apply(DotnetTransforms.mapAsync(DotnetService::mapAsync, config))
+                .apply(DotnetTransforms.mapAsync(config))
                 .setLocalParallelism(config.getLocalParallelism()) // number of processors per member
 
                 .writeTo(Sinks.map("result-map"));
