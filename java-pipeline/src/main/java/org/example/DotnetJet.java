@@ -45,7 +45,11 @@ public class DotnetJet {
                 .addJar("hazelcast/extensions/dotnet/target/hazelcast-jet-dotnet-5.3.0-SNAPSHOT.jar")
                 // always include this class
                 .addClass(DotnetJet.class);
-        config.configureJob(jobConfig); // attaches the directories containing the dotnet exe, etc.
+
+        // applies the Dotnet config to the job config (attaches directories, etc)
+        config.configureJob(jobConfig);
+
+        // submit
         Hazelcast.bootstrappedInstance().getJet().newJob(pipeline, jobConfig);
     }
 }
