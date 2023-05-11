@@ -26,6 +26,9 @@ git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jet-dotnet
 
 ### Build and pack the .NET client
 (once stable, this step would *not* be required)
+
+Requirements: Powershell (pwsh), .NET 7.
+
 ```sh
 cd hazelcast-csharp-client
 pwsh ./hz.ps1 build,pack-nuget
@@ -41,17 +44,21 @@ mvn install -DskipTests -Dcheckstyle.skip=true
 And unzip the distribution
 (we're going to need scripts)
 ```sh
-unzip hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT.zip -d temp/hazelcast-5.3.0-SNAPSHOT
+mkdir temp
+unzip hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT.zip -d temp
 ```
 
 #### Build and publish the .NET service
+
+Replace `<os>` and `<arch>` with the OS and architecture you indend to run the service on.
+You can publish for several combinations of OS and architecture.
+OS can be: `win`, `linux`, `osx`. Architecture can be: `x64`, `arm64`.
+
 ```sh
 cd dotnet-service
 dotnet build
-dotnet publish -c Release -r win-x64 -o target-sc/win-x64 --self-contained
-dotnet publish -c Release -r win-x64 -o target/win-x64 --no-self-contained
-dotnet publish -c Release -r win-x64 -o target-sc/linux-x64 --self-contained
-dotnet publish -c Release -r win-x64 -o target/linux-x64 --no-self-contained
+dotnet publish -c Release -r win-x64 -o target-sc/<os>-<arch> --self-contained
+dotnet publish -c Release -r win-x64 -o target/<os>-<arch> --no-self-contained
 ```
 
 ### Build the Java pipeline definition
@@ -85,6 +92,12 @@ For instance, the following member configuration file is appropriate:
   </map>
 
 </hazelcast>
+```
+
+Such a file is present in the `java-pipeline` directory and therefore the server can be started with:
+```sh
+HAZELCAST_CONFIG=./java-pipeline/dotjet.xml
+temp/hazelcast-5.3.0-SNAPSHOT/bin/hz start
 ```
 
 ### Submit the pipeline job
