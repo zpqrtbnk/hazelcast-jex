@@ -4,6 +4,7 @@ export DEMO=/c/Users/sgay/Code/hazelcast-jet-dotnet
 export CLUSTERNAME=dev
 export CLUSTERADDR=192.168.1.49:5701
 export CLI=$DEMO/hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT/bin/hz-cli
+export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT/bin/hz
 export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 
 # build the Hazelcast .NET client
@@ -33,15 +34,19 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 
 # (ensure a standard Hazelcast 5.3 server is running)
 # eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config java-pipeline/dotjet.xml
+export HAZELCAST_CONFIG=$DEMO/java-pipeline/dotjet.xml
+$CLZ start
 
-#temp
-#exit
+# submit the job (the dotnet way)
+(cd dotnet-submit &&
+    dotnet build &&
+    dotnet run -- --hazelcast.clusterName=$CLUSTERNAME --hazelcast.networking.addresses.0=$CLUSTERADDR)
 
-# submit the job
-$CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
-    $DEMO/java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar \
-    -d $DEMO/dotnet-service/target-sc \
-    -x service
+# submit the job (the java way)
+#$CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
+#    $DEMO/java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar \
+#    -d $DEMO/dotnet-service/target-sc \
+#    -x service
 
 # verify that the job runs
 # eg
