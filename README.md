@@ -25,7 +25,9 @@ git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jet-dotnet
 ```
 
 ### Build and pack the .NET client
-(once stable, this step would *not* be required)
+
+*Once stable, this step would not be required, as the .NET client would come from
+Nuget, including the `Hazelcast.Net.Jet` package, including everything that we need.*
 
 Requirements: Powershell (pwsh), .NET 7.
 
@@ -35,14 +37,17 @@ pwsh ./hz.ps1 build,pack-nuget
 ```
 
 ### Build Hazelcast
-(once stable, this step would *not* be required)
-(current module code for dotnet does not pass style checks)
+
+*Once stable, this step would not be required, as the Hazelcast cluster would be
+distributed with everything that we need.*
+
+Note:  current module code for dotnet does not pass style checks so we have to disable them.
+
 ```sh
 mvn install -DskipTests -Dcheckstyle.skip=true
 ```
 
-And unzip the distribution
-(we're going to need scripts)
+And unzip the distribution (we're going to need scripts)
 ```sh
 mkdir temp
 unzip hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT.zip -d temp
@@ -61,58 +66,27 @@ dotnet publish -c Release -r win-x64 -o target-sc/<os>-<arch> --self-contained
 dotnet publish -c Release -r win-x64 -o target/<os>-<arch> --no-self-contained
 ```
 
-### Build the Java pipeline definition
-```sh
-cd java-pipeline
-mvn package
-```
-
-### Prepare a cluster
+### Prepare and start a cluster
 You must have a cluster running with Jet and resource uploading being enabled.
 For the sake of the demo, a map `streamed-map` must be configured with journaling.
-For instance, the following member configuration file is appropriate:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<hazelcast xmlns="http://www.hazelcast.com/schema/config"
-           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="http://www.hazelcast.com/schema/config
-           http://www.hazelcast.com/schema/config/hazelcast-config-5.0.xsd">
 
-  <cluster-name>dev</cluster-name>
-
-  <!-- we need jet with resources upload -->
-  <jet enabled="true" resource-upload-enabled="true"></jet>
-
-  <!-- we need a journaled map -->
-  <map name="streamed-map">
-    <event-journal enabled="true">
-      <capacity>5000</capacity>
-      <time-to-live-seconds>60</time-to-live-seconds>
-    </event-journal>
-  </map>
-
-</hazelcast>
-```
+You can use the `hazelcast-cluster.xml` file at the root of this repository as an example.
 
 Such a file is present in the `java-pipeline` directory and therefore the server can be started with:
 ```sh
-HAZELCAST_CONFIG=./java-pipeline/dotjet.xml
+HAZELCAST_CONFIG=./hazelcast-cluster.xml
 temp/hazelcast-5.3.0-SNAPSHOT/bin/hz start
 ```
 
-### Submit the pipeline job
-(for relative paths reasons in various places, be sure to be in the root directory)
+### Submit the job
+(replace the server address appropriately)
 ```sh
-temp/hazelcast-5.3.0-SNAPSHOT/bin/hz-cli [options] submit \
-    java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar \
-    -d dotnet-service/target-sc -x service
+cd dotnet-submit
+dotnet build
+dotnet run -- --hazelcast.clusteName=dev --hazelcast.networking.addresses.0=127.0.0.1:5701
 ```
-With [options] being the connection info to a running cluster. For instance it can be `-tdev@127.0.0.1:5701` or `-f hazelcast-client.yml`.
 
-You can then see the running job with:
-```sh
-temp/hazelcast-5.3.0-SNAPSHOT/bin/hz-cli [options] list-jobs
-```
+NOTE: the job is submitted 100% by .NET code.
 
 ### Use the pipeline
 (replace the server address appropriately)
@@ -137,6 +111,8 @@ Thanks to journaling, the pipeline triggers and passes the entry value (a `SomeT
 The example code then tries to find this entry in the map.
 
 ## Viridian Demonstration
+
+NOTE: for the demo in its current state to work on Viridian, the platform should already be able to accept jobs submitted from .NET. So, for the time being, this simply will not work. So we *have* to use the Java job-submitting code here.
 
 In order to submit the job to Viridian, using SSL, one need to use the Enterprise command-line.
 In the code below, `hz-cli` is from the Enterprise distribution.
@@ -218,20 +194,24 @@ public static async Task Main(string[] args)
     var pipeName = args[0];
     var pipeCount = int.Parse(args[1]);
 
+    // create the server
     await using var jetServer = new JetServer(pipeName, pipeCount);
-    await jetServer.Serve<JetMessage<string, OtherThing>, JetMessage<string, SomeThing>>(request =>
+
+    // add a transform (could add more than one)
+    jetServer.Transform<JetMessage<string, OtherThing>, JetMessage<string, SomeThing>>("doThing",request =>
     {
         var (key, value) = request;
         return request.RespondWith(key, new OtherThing { Value = $"__{value}__" });
     });
+
+    // serve
+    await jetServer.Serve();
 }
 ```
 
 TODO: insert note about configuring the task, and serialization
 
 ## Java application
-
-At the moment, defining the pipeline and submitting the corresponding job to the cluster still requires Java code.
 
 NOTE: attached directories are NOT recursive! 
 The Java application attaches one directory per platform (Windows, Linux...).
