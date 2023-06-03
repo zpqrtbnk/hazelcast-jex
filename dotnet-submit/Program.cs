@@ -2,6 +2,7 @@
 
 using Hazelcast;
 using Hazelcast.Jet;
+using Hazelcast.Jet.Submit;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;

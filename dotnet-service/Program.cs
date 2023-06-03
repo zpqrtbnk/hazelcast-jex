@@ -16,6 +16,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Hazelcast.Jet;
+using Hazelcast.Jet.Serve;
 
 namespace Hazelcast.Jet.Service;
 
@@ -26,27 +27,21 @@ public class Program
         string pipeName;
         string functionName;
 
-        if (args.Length != 3 ||
+        if (args.Length != 2 ||
             string.IsNullOrWhiteSpace(pipeName = args[0].Trim()) ||
-            string.IsNullOrWhiteSpace(functionName = args[2].Trim()) ||
             !int.TryParse(args[1], out var pipeCount) ||
             pipeCount <= 0)
         {
             Console.WriteLine("usage: exe <pipe-name> <pipe-count> <function-name>");
             Console.WriteLine("Starts the .NET server with <pipe-count> pipes named <pipe-name>-N");
-            Console.WriteLine("and executing <function-name>.");
-            return;
-        }
-
-        if (functionName != "doThingDotnet") {
-            Console.WriteLine($"function {functionName} is not supported");
             return;
         }
 
         // create the server, and serve the transformation
         await using var jetServer = new JetServer(pipeName, pipeCount);
         jetServer.ConfigureOptions += ConfigureOptions;
-        await jetServer.Serve<JetMessage<string, SomeThing>, JetMessage<string, OtherThing>>(TransformDoThing);
+        jetServer.Transform<JetMessage<string, SomeThing>, JetMessage<string, OtherThing>>("doThingDotnet", TransformDoThing);
+        await jetServer.Serve();
     }
 
     private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder)
@@ -78,14 +73,20 @@ public class Program
     private static JetMessage<string, OtherThing> TransformDoThing(JetMessage<string, SomeThing> request)
     {
         var context = request.ServerContext;
+
+        // FIXME troubleshooting
+        //if (request == null) throw new Exception("request is null"); // can't be, a struct!!
+        if (request.Buffers == null) throw new Exception("request.buffers is null");
+        if (request.Buffers.Length != 2) throw new Exception("request.buffers.length != 2");
+
         var (key, value) = request;
 
-        context.Logger.LogDebug($"Dotnet.Jet Server {context.PipeNumber}:{request.OperationId} input key={key}, value={value}.");
+        context.Logger.LogDebug($"{context.PipeNumber}:doThingDotnet:{request.OperationId} input key={key}, value={value}.");
 
         // compute result
         var result = new OtherThing { Value = $"__{value.Value}__" };
 
-        context.Logger.LogDebug($"Dotnet.Jet Server {context.PipeNumber}:{request.OperationId} output key={key}, value={result}.");
+        context.Logger.LogDebug($"{context.PipeNumber}:doThingDotnet:{request.OperationId} output key={key}, value={result}.");
 
         // write back
         return request.RespondWith(key, result);
