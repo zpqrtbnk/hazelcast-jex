@@ -9,11 +9,13 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 
 # build the Hazelcast .NET client
 # includes the new Hazelcast.Net.Jet NuGet package
+# and cleanup the package cache because we are not changing the version
 (cd hazelcast-csharp-client && \
-    pwsh ./hz.ps1 build,pack-nuget)
+    pwsh ./hz.ps1 build,pack-nuget && \
+    rm -rf ~/.nuget/packages/hazelcast.net.jet)
 
 # build the Hazelcast project
-# includes the new dotnet extension
+# includes the new dotnet extension package
 (cd hazelcast && \
     $MVN install -DskipTests -Dcheckstyle.skip=true && \
     cd distribution/target && \
@@ -22,20 +24,24 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
 
 # build the dotnet service that runs the transform
 (cd dotnet-service && 
-    dotnet build &&
-    dotnet publish -c Release -r win-x64 -o target/win-x64 --no-self-contained &&
-    dotnet publish -c Release -r linux-x64 -o target/linux-x64 --no-self-contained &&
-    dotnet publish -c Release -r win-x64 -o target-sc/win-x64 --self-contained &&
-    dotnet publish -c Release -r linux-x64 -o target-sc/linux-x64 --self-contained)
+    dotnet build)
+
+# publish the service for the platforms we want to support
+for platform in win-x64 linux-x64 osx-arm64; do
+  (cd dotnet-service && \
+      dotnet publish -c Release -r $platform -o target/$platform --no-self-contained && \
+      dotnet publish -c Release -r $platform -o target-sc/$platform --self-contained)
+done      
 
 # build the Java pipeline that submits the job
-(cd java-pipeline && \
-    $MVN package)
+# commented out: we are submitting using .NET now
+#(cd java-pipeline && \
+#    $MVN package)
 
 # (ensure a standard Hazelcast 5.3 server is running)
 # eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config java-pipeline/dotjet.xml
 export HAZELCAST_CONFIG=$DEMO/java-pipeline/dotjet.xml
-$CLZ start
+#$CLZ start
 
 # submit the job (the dotnet way)
 (cd dotnet-submit &&
