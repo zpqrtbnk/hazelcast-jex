@@ -1,0 +1,21 @@
+job:
+  name: my-job
+  resources:
+    - id: python-
+      type: DIRECTORY
+      path: "%PYTHON_DIR%/path/to/python/files"
+  pipeline:
+    - pipeline:
+        - source: map-journal
+          map-name: "streamed-map"
+          journal-initial-position: START_FROM_CURRENT
+          timestamp: INGESTION
+        - transform: python
+          parallelism:
+            processors: 2
+            operations: 2
+          preserve-order: true
+          python-whatever: !!!FIXME!!!!
+
+        - sink: map
+          map-name: "result-map"

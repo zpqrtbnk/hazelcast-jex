@@ -1,11 +1,32 @@
 
 # initialize
 export DEMO=/c/Users/sgay/Code/hazelcast-jet-dotnet
+export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn
 export CLUSTERNAME=dev
-export CLUSTERADDR=192.168.1.49:5701
-export CLI=$DEMO/hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT/bin/hz-cli
-export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-5.3.0-SNAPSHOT/bin/hz
-export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
+export CLUSTERADDR=localhost:5701
+export HZVERSION=5.4.0-SNAPSHOT
+export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
+export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
+export CLC=hazelcast-commandline-client/build/clc.exe
+export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
+
+# configure CLC
+cat <<EOF > $TEMP/clc-config.yml
+cluster:
+  name: $CLUSTERNAME
+  address: $CLUSTERADDR
+EOF
+$CLC config add $TEMP/clc-config.yml
+rm $TEMP/clc-config.yml
+
+# build the Hazelcast project
+# includes the new dotnet extension package
+# (mvn 'install' or 'package' ?)
+(cd hazelcast && \
+    $MVN package -DskipTests -Dcheckstyle.skip=true && \
+    cd distribution/target && \
+    rm -rf hazelcast-$HZVERSION && 
+    unzip hazelcast-$HZVERSION.zip)
 
 # build the Hazelcast .NET client
 # includes the new Hazelcast.Net.Jet NuGet package
@@ -14,59 +35,46 @@ export MVN=../../mvn/apache-maven-3.8.1/bin/mvn
     pwsh ./hz.ps1 build,pack-nuget && \
     rm -rf ~/.nuget/packages/hazelcast.net.jet)
 
-# build the Hazelcast project
-# includes the new dotnet extension package
-(cd hazelcast && \
-    $MVN install -DskipTests -Dcheckstyle.skip=true && \
-    cd distribution/target && \
-    rm -rf hazelcast-5.3.0-SNAPSHOT && 
-    unzip hazelcast-5.3.0-SNAPSHOT.zip)
+# build the demo code
+# * a 'common' project = a library used by other projects
+# * a 'service' project = the server-side .NET code
+# * a 'submit' project = submits the job (eventually, will do with CLC)
+# * a 'example' project = the client-side .NET code
 
 # build the dotnet service that runs the transform
-(cd dotnet-service && 
+(cd dotnet-demo && 
     dotnet build)
 
 # publish the service for the platforms we want to support
+# for now, we publish 'target' which are single-file executables (but require that .NET is installed)
+#                 and 'target-sc' which are self-contained executables (include .NET)
 for platform in win-x64 linux-x64 osx-arm64; do
-  (cd dotnet-service && \
+  (cd dotnet-demo\dotnet-service && \
       dotnet publish -c Release -r $platform -o target/$platform --no-self-contained && \
       dotnet publish -c Release -r $platform -o target-sc/$platform --self-contained)
 done      
 
-# build the Java pipeline that submits the job
-# commented out: we are submitting using .NET now
-#(cd java-pipeline && \
-#    $MVN package)
-
-# (ensure a standard Hazelcast 5.3 server is running)
-# eg: hz run-server -server-version 5.3.0-SNAPSHOT -server-config java-pipeline/dotjet.xml
-export HAZELCAST_CONFIG=$DEMO/java-pipeline/dotjet.xml
-#$CLZ start
+# (ensure a standard Hazelcast server is running)
+$CLZ start
 
 # submit the job (the dotnet way)
-(cd dotnet-submit &&
-    dotnet build &&
-    dotnet run -- --hazelcast.clusterName=$CLUSTERNAME --hazelcast.networking.addresses.0=$CLUSTERADDR)
-
-# submit the job (the java way)
-#$CLI -t$CLUSTERNAME@$CLUSTERADDR submit \
-#    $DEMO/java-pipeline/target/dotnet-jet-1.0-SNAPSHOT.jar \
-#    -d $DEMO/dotnet-service/target-sc \
-#    -x service
+# (eventually, this should be done by CLC)
+# submit:source points to the yaml file
+# submit:yaml:* provides replacement for %TOKEN% in the yaml file
+(cd dotnet-demo/dotnet-submit &&
+    dotnet run -- --hazelcast.clusterName=$CLUSTERNAME --hazelcast.networking.addresses.0=$CLUSTERADDR \
+                  --submit:source=$DEMO/dotnet-demo/my-job.yml \
+                  --submit:yaml:DOTNET_DIR=$DEMO/dotnet-demo/dotnet-service/target-sc)
 
 # verify that the job runs
-# eg
-# ID                  STATUS             SUBMISSION TIME         NAME
-# 09bb-e6b6-a100-0001 RUNNING            2023-04-20T14:24:38.400 dotjet
-$CLI -t$CLUSTERNAME@$CLUSTERADDR list-jobs
-
-# can cancel with
-#$CLI -t$CLUSTERNAME@$CLUSTERADDR cancel $( $CLI -t$CLUSTERNAME@$CLUSTERADDR list-jobs|grep dotjet|cut -f1 -d\  )
+$CLC job list
 
 # run the example
-(cd dotnet-example && 
-    dotnet build &&
+(cd dotnet-demo/dotnet-example && 
     dotnet run -- --hazelcast.clusterName=$CLUSTERNAME --hazelcast.networking.addresses.0=$CLUSTERADDR)
+
+# cancel the job with
+$CLC job cancel my-job
 
 # example should run OK
 # also verify the server log

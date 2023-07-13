@@ -1,10 +1,11 @@
 obj/
 bin/
 /.vs/
+/**/.vs/
 /temp/
 /local/
 /.idea/
-/*/.idea/
+/**/.idea/
 /.nuget/
 
 Thumbs.db
