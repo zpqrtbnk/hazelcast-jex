@@ -4,3 +4,6 @@
 [submodule "hazelcast-csharp-client"]
 	path = hazelcast-csharp-client
 	url = https://github.com/zpqrtbnk/hazelcast-csharp-client
+[submodule "hazelcast-commandline-client"]
+	path = hazelcast-commandline-client
+	url = https://github.com/zpqrtbnk/hazelcast-commandline-client
