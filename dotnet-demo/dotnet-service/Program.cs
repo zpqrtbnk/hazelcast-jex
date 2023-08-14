@@ -14,8 +14,10 @@
 
 using System;
 using System.Threading.Tasks;
-using Hazelcast.Jet.Serve;
+using Hazelcast.UserCode.Data;
+using Hazelcast.UserCode;
 using Microsoft.Extensions.Logging;
+using YamlDotNet.Core.Tokens;
 
 namespace Hazelcast.Jet.Demo.Service;
 
@@ -35,23 +37,18 @@ public class Program
     public static async Task Main(params string[] args)
     {
         string pipeName;
-        string functionName;
 
-        if (args.Length != 2 ||
-            string.IsNullOrWhiteSpace(pipeName = args[0].Trim()) ||
-            !int.TryParse(args[1], out var pipeCount) ||
-            pipeCount <= 0)
+        if (args.Length != 1 || string.IsNullOrWhiteSpace(pipeName = args[0].Trim()))
         {
-            Console.WriteLine("usage: exe <pipe-name> <pipe-count> <function-name>");
-            Console.WriteLine("Starts the .NET server with <pipe-count> pipes named <pipe-name>-N");
+            Console.WriteLine("usage: exe <pipe-name>");
             return;
         }
 
-        // create the server, and serve the transformation
-        await using var jetServer = new JetServer(pipeName, pipeCount);
-        jetServer.ConfigureOptions += ConfigureOptions;
-        jetServer.Transform<JetMessage<string, SomeThing>, JetMessage<string, OtherThing>>("doThingDotnet", TransformDoThing);
-        await jetServer.Serve();
+        // create the server, and serve the functions
+        await using var server = new UserCodeServer(pipeName);
+        server.ConfigureOptions += ConfigureOptions;
+        server.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
+        await server.Serve();
     }
 
     private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder)
@@ -72,34 +69,29 @@ public class Program
                 // we have to provide them
                 compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
                 compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
-
             })
 
             // enable logging to console, with DEBUG level for the JetServer
             .WithConsoleLogger()
-            .WithLogLevel<JetServer>(LogLevel.Debug);
+            .WithLogLevel<UserCodeServer>(LogLevel.Debug);
     }
 
-    private static JetMessage<string, OtherThing> TransformDoThing(JetMessage<string, SomeThing> request)
+    // NOTE: we cannot use a generic IMapEntry<,> here because of silly Java interop, we get
+    // a non-generic entry, making it generic would allocate as we'd have to wrap the non-
+    // generic one... unless we make the wrapper a plain struct? but still the server would
+    // need to know how to go from non-generic to generic = how?
+    
+    private static IMapEntry DoThing(IMapEntry input, ServerContext context)
     {
-        var context = request.ServerContext;
+        var (key, value) = input.Of<string, SomeThing>();
 
-        // FIXME troubleshooting
-        //if (request == null) throw new Exception("request is null"); // can't be, a struct!!
-        if (request.Buffers == null) throw new Exception("request.buffers is null");
-        if (request.Buffers.Length != 2) throw new Exception("request.buffers.length != 2");
-
-        var (key, value) = request;
-
-        context.Logger.LogDebug($"{context.PipeNumber}:doThingDotnet:{request.OperationId} input key={key}, value={value}.");
+        context.Logger.LogDebug($"doThingDotnet: input key={key}, value={value}.");
 
         // compute result
         var result = new OtherThing { Value = $"__{value.Value}__" };
 
-        context.Logger.LogDebug($"{context.PipeNumber}:doThingDotnet:{request.OperationId} output key={key}, value={result}.");
+        context.Logger.LogDebug($"doThingDotnet: output key={key}, value={result}.");
 
-        // write back
-        return request.RespondWith(key, result);
+        return IMapEntry.New(key, result);
     }
 }
-

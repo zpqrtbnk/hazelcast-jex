@@ -13,7 +13,7 @@
 // limitations under the License.
 
 using System.Reflection;
-
+using System.Text.RegularExpressions;
 using Hazelcast;
 using Hazelcast.Jet;
 using Hazelcast.Jet.Submit;
@@ -35,7 +35,7 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        var programOptions = new ProgramOptions(); // syntax: --submit:source=source.yml --submit:yaml:DOTNET_DIR=path/to/target
+        var programOptions = new ProgramOptions(); // syntax: --submit:source=source.yml --submit:var:DOTNET_DIR=path/to/target
         var options = BuildOptions(args, programOptions);
 
         if (!File.Exists(programOptions.Source))
@@ -60,9 +60,24 @@ public class Program
         // prepare the job
         Console.WriteLine("Prepare job");
         var yaml = await File.ReadAllTextAsync(programOptions.Source);
-        if (programOptions.Yaml != null)
-            foreach (var (key, value) in programOptions.Yaml)
-                yaml = yaml.Replace("%" + key + "%", value);
+        //if (programOptions.Yaml != null)
+        //    foreach (var (key, value) in programOptions.Yaml)
+        //        yaml = Regex.Replace(yaml, @"(?<!\$)\$" + key, value);
+        if (programOptions.Define != null)
+        {
+            // TODO: move to a utility class
+            // TODO: compile/generate regex
+            yaml = Regex.Replace(
+                yaml,
+                @"(.|^)\$([A-Z_]*)",
+                match => 
+                    match.Groups[1].Value == "\\" ? "$" + match.Groups[2].Value :
+                    programOptions.Define.TryGetValue(match.Groups[2].Value, out var value) ? match.Groups[1].Value + value :
+                    match.Value
+            );
+        }
+
+        Console.WriteLine(yaml);
 
         var job = JetJob.FromYaml(yaml);
 

@@ -7,8 +7,6 @@ and .NET or Python using either gRPC, or a fast shared-memory IPC mechanism.
 
 *This project is in POC/WIP state. Don't expect it to be ready for production usage.*
 
-From a high-level standpoint, this solution relies on:
-
 ## Demo
 
 The entire demonstration is scripted in the `./demo.sh` shell script.
@@ -19,14 +17,16 @@ git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jex
 ```
 
 Then, follow the script to:
-* Build the Hazelcast Java project
-* Build the Hazelcast .NET client
-* Run a cluster
-* Submit a job
-* Run an example to validate that the job is running
-* Cancel the job
+* Edit the top of the demo.sh script with your details
+* Initialize the demo env with '. ./demo.sh'
+* Build the Hazelcast Java project with 'demo build-cluster'
+* Build the Hazelcast .NET client with 'demo build-demo'
+* Run a cluster with '$CLZ start'
+* Submit a job with 'demo submit'
+* Run an example to validate that the job is running with 'demo example'
+* Cancel the job with '$CLC job cancel my-job'
 
-Requirements: Powershell (pwsh), .NET 7.
+Requirements: Bash, Powershell (pwsh), .NET 7.
 
 The example *should* produce something like:
 ```text

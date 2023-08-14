@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Microsoft.Extensions.Configuration;
+
 namespace Hazelcast.Jet.Demo.Submit;
 
 internal class ProgramOptions
 {
     public string? Source { get; set; }
 
-    public string? ResourcesBaseDir { get; set; }
+    //public string? ResourcesBaseDir { get; set; }
 
-    public Dictionary<string, string>? Yaml { get; set; }
+    public Dictionary<string, string>? Define { get; set; }
 }

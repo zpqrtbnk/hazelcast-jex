@@ -17,5 +17,5 @@ $RECYCLE.BIN/
 /_ReSharper.Caches
 .github/secrets
 
-/dotnet-service/target*/
+/dotnet-demo/dotnet-service/target*/
 /java-pipeline/target/
