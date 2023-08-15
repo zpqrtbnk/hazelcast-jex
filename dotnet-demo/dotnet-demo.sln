@@ -7,9 +7,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-submit", "dotnet-sub
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-example", "dotnet-example\dotnet-example.csproj", "{A5DC2904-1758-446C-97FB-3133C26A9B69}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-service", "dotnet-service\dotnet-service.csproj", "{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-shmem", "dotnet-shmem\dotnet-shmem.csproj", "{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dotnet-common", "dotnet-common\dotnet-common.csproj", "{948AE35E-E7F1-4844-88F2-BD9C9A037471}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-common", "dotnet-common\dotnet-common.csproj", "{948AE35E-E7F1-4844-88F2-BD9C9A037471}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dotnet-grpc", "dotnet-grpc\dotnet-grpc.csproj", "{27CFF623-B7F4-4664-B993-427C88A9ACED}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Release|Any CPU.Build.0 = Release|Any CPU
+		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

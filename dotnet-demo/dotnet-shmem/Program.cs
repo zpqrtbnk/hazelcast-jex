@@ -13,9 +13,11 @@
 // limitations under the License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Hazelcast.UserCode.Data;
 using Hazelcast.UserCode;
+using Hazelcast.UserCode.Services;
 using Microsoft.Extensions.Logging;
 using YamlDotNet.Core.Tokens;
 
@@ -36,19 +38,21 @@ public class Program
 {
     public static async Task Main(params string[] args)
     {
-        string pipeName;
+        string pipeUid;
 
-        if (args.Length != 1 || string.IsNullOrWhiteSpace(pipeName = args[0].Trim()))
+        if (args.Length != 1 || string.IsNullOrWhiteSpace(pipeUid = args[0].Trim()))
         {
-            Console.WriteLine("usage: exe <pipe-name>");
+            Console.WriteLine("usage: exe <pipe-uid>");
             return;
         }
 
         // create the server, and serve the functions
-        await using var server = new UserCodeServer(pipeName);
-        server.ConfigureOptions += ConfigureOptions;
-        server.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
-        await server.Serve();
+        await using var userCodeServer = new UserCodeServer();
+        userCodeServer.ConfigureOptions += ConfigureOptions;
+        userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
+
+        await using var service = new SharedMemoryService(true, null, pipeUid); // FIXME why IAsyncDisposable?!
+        await service.Serve(userCodeServer, CancellationToken.None);
     }
 
     private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder)
@@ -81,7 +85,7 @@ public class Program
     // generic one... unless we make the wrapper a plain struct? but still the server would
     // need to know how to go from non-generic to generic = how?
     
-    private static IMapEntry DoThing(IMapEntry input, ServerContext context)
+    private static IMapEntry DoThing(IMapEntry input, UserCodeContext context)
     {
         var (key, value) = input.Of<string, SomeThing>();
 

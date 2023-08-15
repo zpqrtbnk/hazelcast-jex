@@ -58,7 +58,8 @@ function build_dotnet () {
     (cd hazelcast-csharp-client &&
         pwsh ./hz.ps1 build,pack-nuget &&
         rm -rf ~/.nuget/packages/hazelcast.net &&
-        rm -rf ~/.nuget/packages/hazelcast.net.jet)
+        rm -rf ~/.nuget/packages/hazelcast.net.jet &&
+        rm -rf ~/.nuget/packages/hazelcast.net.usercode)
 }
 
 function build_demo () {
@@ -74,30 +75,50 @@ function build_demo () {
         dotnet build)
 
     # publish the service for the platforms we want to support
-    # for now, we publish 'target' which are single-file executables (but require that .NET is installed)
-    #                 and 'target-sc' which are self-contained executables (include .NET)
-    for platform in win-x64 linux-x64 osx-arm64; do
-    (cd dotnet-demo/dotnet-service &&
-        dotnet publish -c Release -r $platform -o target/$platform --no-self-contained &&
-        dotnet publish -c Release -r $platform -o target-sc/$platform --self-contained)
-    done      
+    # the project file specifies:
+    #   <PublishSingleFile>true</PublishSingleFile>
+    #   <PublishTrimmed>false</PublishTrimmed>
+    # and then we publish
+    #    publish/single-file/* which are single-file executables (but require that .NET is installed)
+    #    publish/self-contained/* which are self-contained executables (include .NET)
+    (cd dotnet-demo/dotnet-shmem &&
+        rm -rf publish &&
+        for platform in win-x64 linux-x64 osx-arm64; do
+            dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
+            dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
+        done)
+
+    (cd dotnet-demo/dotnet-grpc &&
+        rm -rf publish &&
+        for platform in win-x64 linux-x64 osx-arm64; do
+            dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
+            dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
+        done)
+
+
 }
 
 function submit () {
+
+    USERCODE_TRANSPORT=$1
+    echo "DEMO: transport=$USERCODE_TRANSPORT"
+
     # submit the job (the dotnet way)
     # (eventually, this should be done by CLC)
     # submit:source points to the yaml file
-    # submit:yaml:* provides replacement for %TOKEN% in the yaml file
+    # submit:define:* provides replacement for %TOKEN% in the yaml file
     (cd dotnet-demo/dotnet-submit &&
-        dotnet run -- --hazelcast.clusterName=$CLUSTERNAME --hazelcast.networking.addresses.0=$CLUSTERADDR \
-                    --submit:source=$DEMO/dotnet-demo/my-job-2.yml \
-                    --submit:define:DOTNET_DIR=$DEMO/dotnet-demo/dotnet-service/target-sc)
+        dotnet run -- \
+            --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR \
+            --submit:source=$DEMO/dotnet-demo/my-job-$USERCODE_TRANSPORT.yml \
+            --submit:define:DOTNET_DIR=$DEMO/dotnet-demo/dotnet-$USERCODE_TRANSPORT/publish/self-contained)
 }
 
 function example () {
     # run the example
     (cd dotnet-demo/dotnet-example && 
-        dotnet run -- --hazelcast.clusterName=$CLUSTERNAME --hazelcast.networking.addresses.0=$CLUSTERADDR)
+        dotnet run -- \
+            --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR)
 }
 
 # (ensure a standard Hazelcast server is running)
@@ -112,10 +133,15 @@ function example () {
 # example should run OK
 # also verify the server log
 
+# see 
+# https://stackoverflow.com/questions/3898665/what-is-in-bash
+# https://www.thegeekstuff.com/2010/05/bash-shell-special-parameters/
+
 CMDS=$1
+shift
 for cmd in $(IFS=,;echo $CMDS); do
     cmd=${cmd//-/_}
-    echo "DEMO: $cmd"
+    echo "DEMO: $cmd $@"
     eval $cmd $@
-    if [ $? -ne 0 ]; then die; fi
+    if [ $? -ne 0 ]; then break; fi
 done
