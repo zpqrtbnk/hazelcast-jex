@@ -8,6 +8,7 @@ bin/
 /**/.idea/
 /.nuget/
 /**/*.user
+/**/__pycache__/
 
 Thumbs.db
 ehthumbs.db
@@ -19,4 +20,5 @@ $RECYCLE.BIN/
 .github/secrets
 
 /dotnet-demo/dotnet-*/publish/
+/python-demo/python-*/publish/
 /java-pipeline/target/
