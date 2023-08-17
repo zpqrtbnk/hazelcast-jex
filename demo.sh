@@ -1,7 +1,7 @@
 
 function init () {
     # initialize
-    export DEMO=/c/Users/sgay/Code/hazelcast-jet-dotnet
+    export DEMO=/c/Users/sgay/Code/hazelcast-jex
     export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn
     export CLUSTERNAME=dev
     export CLUSTERADDR=localhost:5701
@@ -51,7 +51,7 @@ function build_cluster () {
         unzip hazelcast-$HZVERSION.zip)
 }
 
-function build_dotnet () {
+function build_client_dotnet () {
     # build the Hazelcast .NET client
     # includes the new Hazelcast.Net.Jet NuGet package
     # and cleanup the package cache because we are not changing the version
@@ -62,7 +62,7 @@ function build_dotnet () {
         rm -rf ~/.nuget/packages/hazelcast.net.usercode)
 }
 
-function build_demo () {
+function build_demo_dotnet () {
 
     # build the demo code
     # * a 'common' project = a library used by other projects
@@ -70,55 +70,113 @@ function build_demo () {
     # * a 'submit' project = submits the job (eventually, will do with CLC)
     # * a 'example' project = the client-side .NET code
 
-    # build the dotnet service that runs the transform
-    (cd dotnet-demo && 
-        dotnet build)
+    (
+        cd jex-dotnet
 
-    # publish the service for the platforms we want to support
-    # the project file specifies:
-    #   <PublishSingleFile>true</PublishSingleFile>
-    #   <PublishTrimmed>false</PublishTrimmed>
-    # and then we publish
-    #    publish/single-file/* which are single-file executables (but require that .NET is installed)
-    #    publish/self-contained/* which are self-contained executables (include .NET)
-    (cd dotnet-demo/dotnet-shmem &&
-        rm -rf publish &&
-        for platform in win-x64 linux-x64 osx-arm64; do
-            dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
-            dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
-        done)
+        # build the dotnet jex code
+        dotnet build
 
-    (cd dotnet-demo/dotnet-grpc &&
-        rm -rf publish &&
-        for platform in win-x64 linux-x64 osx-arm64; do
-            dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
-            dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
-        done)
+        # publish the dotnet service for the platforms we want to support
+        # the project file specifies:
+        #   <PublishSingleFile>true</PublishSingleFile>
+        #   <PublishTrimmed>false</PublishTrimmed>
+        # and then we publish
+        #    publish/single-file/* which are single-file executables (but require that .NET is installed)
+        #    publish/self-contained/* which are self-contained executables (include .NET)
+        (
+            cd dotnet-shmem
+            rm -rf publish
+            for platform in win-x64 linux-x64 osx-arm64; do
+                dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
+                dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
+            done
+        )
+        (
+            cd dotnet-grpc
+            rm -rf publish
+            for platform in win-x64 linux-x64 osx-arm64; do
+                dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
+                dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
+            done
+        )
+    )
+}
 
+function build_demo_python () {
 
+    (
+        cd jex-python
+
+        PUBLISH=$PWD/python-grpc/publish/
+        rm -rf $PUBLISH
+        mkdir $PUBLISH
+        PUBLISH=$PUBLISH/any
+        mkdir $PUBLISH
+        (
+            cd grpc-runtime
+            find . -type f -name '*.py' -exec cp --parents {} $PUBLISH \;
+        )
+        (
+            cd python-grpc
+            cp requirements.txt $PUBLISH
+            cp *.py $PUBLISH
+        )
+    )
+}
+
+function runtime_python () {
+
+    (
+        VENV_PATH=$PWD/temp
+        cd jex-python/python-grpc/publish/any
+        python usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
+    )
+}
+
+function runtime_dotnet_grpc () {
+    (
+        cd jex-dotnet/dotnet-grpc
+        dotnet run
+    )
 }
 
 function submit () {
 
-    USERCODE_TRANSPORT=$1
-    echo "DEMO: transport=$USERCODE_TRANSPORT"
+    SOURCE=$1
+    echo "DEMO: submit $SOURCE" # fixme make it absolute?
+
+    if [ ! -f $SOURCE ]; then
+        echo "ERR: file nout found"
+        return
+    fi
 
     # submit the job (the dotnet way)
     # (eventually, this should be done by CLC)
     # submit:source points to the yaml file
     # submit:define:* provides replacement for %TOKEN% in the yaml file
-    (cd dotnet-demo/dotnet-submit &&
+    (
+        cd jex-dotnet/dotnet-submit
         dotnet run -- \
             --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR \
-            --submit:source=$DEMO/dotnet-demo/my-job-$USERCODE_TRANSPORT.yml \
-            --submit:define:DOTNET_DIR=$DEMO/dotnet-demo/dotnet-$USERCODE_TRANSPORT/publish/self-contained)
+            --submit:source=$SOURCE \
+            --submit:define:DOTNET_DIR=$DEMO/dotnet-demo/dotnet-$USERCODE_TRANSPORT/publish/self-contained
+    )
 }
 
 function example () {
+
     # run the example
-    (cd dotnet-demo/dotnet-example && 
+    (
+        cd jex-dotnet/dotnet-example
         dotnet run -- \
             --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR)
+}
+
+function test_grpc () {
+    (
+        cd jex-dotnet/dotnet-grpc-client
+        dotnet run 
+    )
 }
 
 # (ensure a standard Hazelcast server is running)

@@ -19,6 +19,5 @@ $RECYCLE.BIN/
 /_ReSharper.Caches
 .github/secrets
 
-/dotnet-demo/dotnet-*/publish/
-/python-demo/python-*/publish/
+/**/publish/
 /java-pipeline/target/
