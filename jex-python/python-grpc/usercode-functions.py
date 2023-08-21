@@ -20,8 +20,11 @@ def configure_client(config:Config):
 # what's the type of input here? of output?
 
 def do_thing(input, context):
-    key = input.key
-    value = input.value # should be SomeThing
+    key = input.get_key()
+    value = input.get_value() # should be SomeThing
+    context.logger.info(f"do_thing {input} / {key} / {value}")
     #context.logger.whatever('do_thing') # FIXME that should not even work?!
     result = OtherThing(f'__{value}__')
-    return MapEntry.create_new(key, result)
+    entry = MapEntry.create_new(key, result)
+    context.logger.info(f"do_thing -> {entry} / {entry.get_key()} / {entry.get_value()}")
+    return entry

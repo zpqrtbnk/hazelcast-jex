@@ -38,6 +38,7 @@ class TransportServicer(usercode_pb2_grpc.TransportServicer):
     
     def create_context(self):
         config = Config()
+        config.cluster_connect_timeout = 4 # fixme make this an option
         configure_client(config)
         config.data_serializable_factories[HzData.get_factory_id()] = HzData.get_factory()
         config.cluster_name = "dev" # should come...
@@ -51,23 +52,28 @@ class TransportServicer(usercode_pb2_grpc.TransportServicer):
         context = None
         for input_message in request_iterator:
             print(f'message {input_message.id}: {input_message.functionName}') # FIXME this does not show in logs?
+            logger.info(f'message {input_message.id}: {input_message.functionName}')
 
             if input_message.functionName == '.END':
                 yield input_message
                 break
 
-            try:
-                if input_message.functionName == '.CONNECT':
-                    context = self.create_context() # FIXME args
-                    yield input_message
-                    continue
-            except:
-                yield usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName='.ERROR', payload=traceback.format_exc().encode('utf-8'))
+            if input_message.functionName == '.CONNECT':
+                if context is None:
+                    try:
+                        context = self.create_context() # FIXME args
+                    except:
+                        yield usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName='.ERROR', payload=traceback.format_exc().encode('utf-8'))
+                yield input_message
 
-            try:
-                yield self.handle(input_message, context)
-            except:
-                yield usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName='.ERROR', payload=traceback.format_exc().encode('utf-8'))
+            else:
+                if context is None:
+                    yield usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName='.ERROR', payload="not ready".encode('utf-8'))
+                else:
+                    try:
+                        yield self.handle(input_message, context)
+                    except:
+                        yield usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName='.ERROR', payload=traceback.format_exc().encode('utf-8'))
 
         logger.info('gRPC call completed')
 
@@ -119,6 +125,7 @@ def serve(port):
     print("for now, type 'stop' in stdin, we'll change this later")
     server.start()
     print("serving...")
+    logger.info("serving...")
     #FIXME in .NET *and* here there's a diff between terminating the 'invoke' call *and* terminating the gRPC server? in case we reconnect?
     #server.wait_for_termination()
     # Wait for a stop signal in stdin
@@ -133,6 +140,6 @@ def serve(port):
     server.stop(0).wait()
 
 # fixme?!
-if __name__ == '__main__':
-    logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(levelname)s [%(name)s] %(threadName)s - %(message)s', level=logging.INFO)
-    serve(port=sys.argv[1])
+#if __name__ == '__main__':
+#    logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(levelname)s [%(name)s] %(threadName)s - %(message)s', level=logging.INFO)
+#    serve(port=sys.argv[1])

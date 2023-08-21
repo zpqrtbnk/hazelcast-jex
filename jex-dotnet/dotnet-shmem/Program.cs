@@ -13,16 +13,21 @@
 // limitations under the License.
 
 using System;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using Hazelcast.Demo;
-using Hazelcast.UserCode.Data;
+using Hazelcast.Configuration;
+using Hazelcast.DependencyInjection;
 using Hazelcast.UserCode;
+using Hazelcast.UserCode.Data;
 using Hazelcast.UserCode.Services;
+using Hazelcast.UserCode.Utilities;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using YamlDotNet.Core.Tokens;
 
-namespace Hazelcast.Jet.Demo.Service;
+namespace Hazelcast.Demo.Service;
 
 // NOTES:
 // the plan here is to have a Hazelcast.Net.Jet.Service project that produces
@@ -39,30 +44,91 @@ public class Program
 {
     public static async Task Main(params string[] args)
     {
-        string pipeUid;
+        const string uidArdName = "--usercode:uid=";
+        var uid = args.FirstOrDefault(x => x.StartsWith(uidArdName))?.Substring(uidArdName.Length);
 
-        if (args.Length != 1 || string.IsNullOrWhiteSpace(pipeUid = args[0].Trim()))
+        if (string.IsNullOrWhiteSpace(uid))
         {
-            Console.WriteLine("usage: exe <pipe-uid>");
+            Console.WriteLine("usage: exe --usercode:uid=<uid>");
             return;
         }
 
-        // create the server, and serve the functions
-        await using var userCodeServer = new UserCodeServer();
-        userCodeServer.ConfigureOptions += ConfigureOptions;
-        userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
+        using var signalService = SignalService.Get();
+        using var cancellation = new CancellationTokenSource();
+        signalService.OnSignalCancel(cancellation);
 
-        await using var service = new SharedMemoryService(true, null, pipeUid); // FIXME why IAsyncDisposable?!
-        await service.Serve(userCodeServer, CancellationToken.None);
+        // create a service collection
+        var services = new ServiceCollection();
+
+        // build the IConfiguration
+        var configuration = new ConfigurationBuilder()
+            .AddHazelcastAndDefaults(args) // add default configuration (appsettings.json, etc) + Hazelcast-specific configuration
+            .Build();
+
+        // add logging to the container, the normal way
+        services.AddLogging(builder => builder.AddConfiguration(configuration.GetSection("logging")).AddConsole());
+
+        // can't use DI to configure Hazelcast as UserCodeServer wants to initialize it first *then* we can alter it
+
+        // register the user code server
+        // don't inject an Hazelcast client as options will be finalized after .CONNECT
+        services.AddTransient<IUserCodeServer>(serviceProvider =>
+        {
+            // create the server, and serve the functions
+            var userCodeServer = new UserCodeServer();
+            userCodeServer.ConfigureOptions += optionsBuilder => ConfigureOptions(optionsBuilder, serviceProvider);
+            userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
+            userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingPython", DoThing); // temp
+            return userCodeServer;
+        });
+
+        // register the worker
+        // FIXME ugly-ish, we should deal with the uid as true options
+        services.AddTransient(serviceProvider => ActivatorUtilities.CreateInstance<Worker>(serviceProvider, uid));
+
+        // create the service provider
+        // will be disposed before the method exits
+        // which will dispose (and shutdown) the Hazelcast client
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        // gets the worker from the container, and run
+        var worker = serviceProvider.GetRequiredService<Worker>();
+        await worker.Run(cancellation.Token).ConfigureAwait(false);
     }
 
-    private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder)
+    private class Worker
+    {
+        private readonly IUserCodeServer _userCodeServer;
+        private readonly ILogger<Worker> _logger;
+        private readonly string _uid;
+
+        public Worker(IUserCodeServer userCodeServer, ILogger<Worker> logger, string uid)
+        {
+            _userCodeServer = userCodeServer;
+            _logger = logger;
+            _uid = uid;
+        }
+
+        public async Task Run(CancellationToken cancellationToken)
+        {
+            // FIXME need a "nice" way to stop the service esp. in case of errors so that we close the mem file
+            _logger.LogInformation("START");
+            await using var service = new SharedMemoryService(true, null, _uid); // FIXME why IAsyncDisposable?!
+            await service.Serve(_userCodeServer, cancellationToken);
+            _logger.LogInformation("END");
+        }
+    }
+
+    private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder, IServiceProvider serviceProvider)
     {
         return builder
 
             // configure serialization
             .With(options =>
             {
+                // inject the logger factory
+                options.LoggerFactory.ServiceProvider = serviceProvider;
+
                 var compact = options.Serialization.Compact;
 
                 // register serializers - we want this in order to use
@@ -74,22 +140,19 @@ public class Program
                 // we have to provide them
                 compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
                 compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
-            })
-
-            // enable logging to console, with DEBUG level for the JetServer
-            .WithConsoleLogger()
-            .WithLogLevel<UserCodeServer>(LogLevel.Debug);
+            });
     }
 
     // NOTE: we cannot use a generic IMapEntry<,> here because of silly Java interop, we get
     // a non-generic entry, making it generic would allocate as we'd have to wrap the non-
     // generic one... unless we make the wrapper a plain struct? but still the server would
     // need to know how to go from non-generic to generic = how?
-    
+
     private static IMapEntry DoThing(IMapEntry input, UserCodeContext context)
     {
         var (key, value) = input.Of<string, SomeThing>();
 
+        context.Logger.LogInformation("THIS IS A TEST YADA YADA");
         context.Logger.LogDebug($"doThingDotnet: input key={key}, value={value}.");
 
         // compute result

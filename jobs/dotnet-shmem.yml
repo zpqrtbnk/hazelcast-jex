@@ -37,12 +37,13 @@ job:
 
           # user code runtime parameters
           runtime: 
-            mode: process
-            process-path: "@dotnet-$PLATFORM" # absolute path, or @resource
-            process-name: "dotnet-shmem"
+            process:
+              path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
+              name: "dotnet-shmem"
+              args:
+                - "--usercode:uid={UID}"
+                - "--Logging:LogLevel:Hazelcast=debug"
             transport: shared-memory
-            #transport: grpc
-            #transport-port: 5252
 
           # user code function name
           function: doThingDotnet

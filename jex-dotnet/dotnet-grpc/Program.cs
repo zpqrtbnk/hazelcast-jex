@@ -20,25 +20,32 @@ public class Program
 {
     public static async Task Main(params string[] args)
     {
+        const string portArgName = "--usercode:grpc:port=";
+        var portArg = args.FirstOrDefault(x => x.StartsWith(portArgName));
+        var port = portArg == null ? 5252 : int.Parse(portArg.Substring(portArgName.Length));
+
         var builder = WebApplication.CreateBuilder(args);
 
         // Additional configuration is required to successfully run gRPC on macOS.
         // For instructions on how to configure Kestrel and gRPC clients on macOS, visit https://go.microsoft.com/fwlink/?linkid=2099682
 
+        // this is going to log to console by default
+        // FIXME is this true?
+
         // configure GRPC port (should this be an arg?)
         builder.WebHost.ConfigureKestrel(options =>
         {
-            options.ListenLocalhost(5252);
+            options.ListenLocalhost(port);
         });
 
         // Add services to the container.
         builder.Services.AddGrpc();
 
-        builder.Services.AddSingleton<IUserCodeServer>(_ =>
+        builder.Services.AddSingleton<IUserCodeServer>(serviceProvider =>
         {
             // create the server, and serve the functions
             var userCodeServer = new UserCodeServer();
-            userCodeServer.ConfigureOptions += ConfigureOptions;
+            userCodeServer.ConfigureOptions += optionsBuilder => ConfigureOptions(optionsBuilder, serviceProvider);
             userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
             userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingPython", DoThing); // temp
             return userCodeServer;
@@ -53,13 +60,16 @@ public class Program
         await app.RunAsync();
     }
 
-    private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder)
+    private static HazelcastOptionsBuilder ConfigureOptions(HazelcastOptionsBuilder builder, IServiceProvider serviceProvider)
     {
         return builder
 
             // configure serialization
             .With(options =>
             {
+                // inject the logger factory
+                options.LoggerFactory.ServiceProvider = serviceProvider;
+
                 var compact = options.Serialization.Compact;
 
                 // register serializers - we want this in order to use
@@ -71,11 +81,7 @@ public class Program
                 // we have to provide them
                 compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
                 compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
-            })
-
-            // enable logging to console, with DEBUG level for the JetServer
-            .WithConsoleLogger()
-            .WithLogLevel<UserCodeServer>(LogLevel.Debug);
+            });
     }
 
     // NOTE: we cannot use a generic IMapEntry<,> here because of silly Java interop, we get

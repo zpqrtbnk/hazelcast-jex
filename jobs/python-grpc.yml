@@ -1,21 +1,57 @@
 job:
   name: my-job
   resources:
-    - id: python-
+    - id: python-any
+      platform: any
       type: DIRECTORY
-      path: "%PYTHON_DIR%/path/to/python/files"
+      path: "$PYTHON_DIR/any"
   pipeline:
     - pipeline:
         - source: map-journal
           map-name: "streamed-map"
           journal-initial-position: START_FROM_CURRENT
           timestamp: INGESTION
-        - transform: python
-          parallelism:
-            processors: 2
-            operations: 2
+
+        # transform using user code
+        - transform: user-code
+
+          # user code runtime parameters
+          runtime: 
+            container:
+              image: "hazelcast/my-image:latest"
+            process:
+              name: "python"
+              work-directory: "{@python-any}"
+              # need a way to distinguish $PLATFORM here from replacement above
+              # {PLATFORM} ? but then how do we escape things?
+              #  $PLATFORM is a global replace that is replaced everywhere b4 yaml is parsed, \$ESCAPE
+              #  @resource is a reference to a resource, \@escape
+              #  {platform} is a runtime value, {{escape}}
+              args: # and we'll need a way to escape '@' too
+                - "usercode-runtime.py"
+                #- "--platform={PLATFORM}"
+                #- "--uid={UID}"
+                - "--venv-name=venv"
+                - "--venv-path={@python-any}"
+                - "--grpc-port=5252"
+            transport: 
+              grpc:
+                port: 5252
+            #mode: process
+            #process-path: "@python-$PLATFORM" # absolute path, or @resource
+            #process-name: "python"
+            ##transport: shared-memory
+            #transport: grpc
+            #transport-port: 5252
+
+          # user code function name
+          function: doThingPython
+
+          # transform parameters
+          name: python-transform
+          parallel-processors: 1
+          parallel-operations: 1
           preserve-order: true
-          python-whatever: !!!FIXME!!!!
 
         - sink: map
           map-name: "result-map"

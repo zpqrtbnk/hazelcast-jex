@@ -69,7 +69,7 @@ public class Program
                 compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
             })
             .Build();
-        var client = new UserCodeClient(hazelcastOptions);
+        var client = new UserCodeClient(hazelcastOptions); // or pass the configure delegate?
 
         var payload = client.ToByteArray(input);
         var message = new UserCodeMessage(id++, "doThingPython", payload);
@@ -88,8 +88,8 @@ public class Program
         Console.WriteLine(result);
         if (result is IMapEntry mapEntry)
         {
-            Console.WriteLine($"key:   {mapEntry.GetKey<string>()}");
-            Console.WriteLine($"value: {mapEntry.GetValue<OtherThing>()}");
+            Console.WriteLine($"key:   {mapEntry.GetKey<string>()?.ToString() ?? "<null>"}");
+            Console.WriteLine($"value: {mapEntry.GetValue<OtherThing>()?.ToString() ?? "<null>"}");
             //Console.WriteLine($"value: {mapEntry.GetKey<object>()}");
         }
 

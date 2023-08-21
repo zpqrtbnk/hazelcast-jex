@@ -7,6 +7,7 @@ import subprocess
 import argparse
 import grpc_server
 import importlib
+import logging
 
 cwd = os.getcwd()
 
@@ -77,11 +78,12 @@ def wrapper():
     # Windows has no support for exec*, spanws a child process and terminate the current one
     #os.execv(python_path, [python_path, work_path])
 
-    print("--")
     process_args = [ python_path, script_path, '--process', '--grpc-port=%d' % grpc_port, '--encoding=%s' % sys.stdout.encoding ]
     if is_verbose:
         process_args.append('--verbose')
     process = subprocess.Popen(process_args, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding=sys.stdout.encoding)
+    print(f"forked process {process.pid}")
+    print("--")
     while True:
         line = process.stdout.readline().strip()
         #try:
@@ -120,6 +122,8 @@ def service():
     grpc_server.serve(grpc_port)
 
 def process():
+
+    logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(levelname)s [%(name)s] %(threadName)s - %(message)s', level=logging.INFO)
 
     # install some required dependencies
     print("install dependencies")

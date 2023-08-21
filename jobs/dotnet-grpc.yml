@@ -37,12 +37,14 @@ job:
 
           # user code runtime parameters
           runtime: 
-            mode: process
-            process-path: "@dotnet-$PLATFORM" # absolute path, or @resource
-            process-name: "dotnet-grpc"
-            #transport: shared-memory
-            transport: grpc
-            transport-port: 5252
+            process:
+              path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
+              name: "dotnet-grpc"
+              args:
+                - "--usercode:grpc:port=5252"
+            transport: 
+              grpc:
+                port: 5252
 
           # user code function name
           function: doThingDotnet

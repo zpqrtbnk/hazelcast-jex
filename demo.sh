@@ -8,11 +8,34 @@ function init () {
     export HZVERSION=5.4.0-SNAPSHOT
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
-    export CLC=hazelcast-commandline-client/build/clc.exe
+    export CLC='hazelcast-commandline-client/build/clc.exe --config $DEMO/temp/clc-config.yml'
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
     export LOGGING_LEVEL=DEBUG
 
+    if [ ! -d $DEMO/temp ]; then
+        mkdir $DEMO/temp
+    fi
+
+    cat <<EOF > $DEMO/temp/clc-config.yml
+    cluster:
+    name: $CLUSTERNAME
+    address: $CLUSTERADDR
+EOF
+
     alias demo=./demo.sh
+    alias clz=$CLZ
+    alias clc=$CLC
+
+    echo "initialized the following aliases:"
+    echo "    demo: invokes the demo script"
+    echo "    clc:  invokes the clc with the demo config"
+    echo "    clz:  invokes the cluster hz script"
+    echo "enjoy!"
+    echo ""
+}
+
+function abspath () {
+    (cd $(dirname $1); echo "$(pwd)/$(basename $1)")
 }
 
 # build the Hazelcast CLC project
@@ -142,24 +165,34 @@ function runtime_dotnet_grpc () {
 
 function submit () {
 
-    SOURCE=$1
-    echo "DEMO: submit $SOURCE" # fixme make it absolute?
+    # examples
+    # demo submit shmem jobs/dotnet-shmem.yml
+    # demo submit grpc jobs/dotnet-grpc.yml
+    # demo submit grpc jobs/python-grpc.yml
+
+    TRANSPORT=$1    
+    SOURCE=$2
+    if [ -z "$TRANSPORT" ]; then echo "transport?"; return; fi
+    if [ -z "$SOURCE" ]; then echo "source?"; return; fi
+    SOURCE=$(abspath $SOURCE)
+    echo "DEMO: submit $TRANSPORT $SOURCE" 
 
     if [ ! -f $SOURCE ]; then
-        echo "ERR: file nout found"
+        echo "ERR: file not found"
         return
     fi
 
     # submit the job (the dotnet way)
     # (eventually, this should be done by CLC)
     # submit:source points to the yaml file
-    # submit:define:* provides replacement for %TOKEN% in the yaml file
+    # submit:define:* provides replacement for $TOKEN in the yaml file
     (
         cd jex-dotnet/dotnet-submit
         dotnet run -- \
             --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR \
             --submit:source=$SOURCE \
-            --submit:define:DOTNET_DIR=$DEMO/dotnet-demo/dotnet-$USERCODE_TRANSPORT/publish/self-contained
+            --submit:define:DOTNET_DIR=$DEMO/jex-dotnet/dotnet-$TRANSPORT/publish/self-contained \
+            --submit:define:PYTHON_DIR=$DEMO/jex-python/python-grpc/publish
     )
 }
 

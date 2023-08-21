@@ -74,16 +74,11 @@ public class Program
             );
         }
 
+        // TODO: remove, debugging
         Console.WriteLine(yaml);
 
+        // create and submit the job
         var job = JetJob.FromYaml(yaml);
-
-        // resources should have been defined in yaml
-        //var dir = Path.GetFullPath(programOptions.Yaml["DOTNET_DIR"]);
-        //foreach (var directory in Directory.GetDirectories(dir))
-        //    job.AttachDirectory(id: $"dotnet-{Path.GetFileName(directory)}-", path: directory);
-
-        // submit the job
         Console.WriteLine("Submit job");
         await jetClient.SubmitJobAsync(job);
         Console.WriteLine("Submitted");

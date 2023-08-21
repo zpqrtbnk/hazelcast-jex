@@ -29,6 +29,7 @@
 
   <ItemGroup>
 	<PackageReference Include="Hazelcast.Net.UserCode" Version="5.3.0-preview.0" />
+	<PackageReference Include="Hazelcast.Net.DependencyInjection" Version="5.3.0-preview.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="7.0.0" />
   </ItemGroup>
 

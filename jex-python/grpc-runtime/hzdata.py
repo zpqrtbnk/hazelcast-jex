@@ -54,8 +54,7 @@ class DeserializingMapEntry(MapEntry, IdentifiedDataSerializable):
             self.value_data = self.to_data(self.value)
         return self.key_data
 
-    def to_object(self, bytes):
-        data = Data(bytes) if bytes is not None else None
+    def to_object(self, data):
         try:
             return self.client._serialization_service.to_object(data)
         except SchemaNotFoundError as error:
