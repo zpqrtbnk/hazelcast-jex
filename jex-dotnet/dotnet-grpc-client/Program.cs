@@ -5,6 +5,7 @@ using Grpc.Net.Client;
 using Hazelcast.UserCode;
 using Hazelcast.UserCode.Data;
 using Hazelcast.UserCode.Transports.Grpc;
+using Microsoft.Extensions.Options;
 
 namespace Hazelcast.Demo.GrpcClient;
 
@@ -12,6 +13,39 @@ public class Program
 {
     public static async Task Main()
     {
+        Console.WriteLine("Schemas:");
+        Console.WriteLine("  SomeThing: " + SomeThingSerializer.CompactSchema.Id);
+        Console.WriteLine("  OtherThing: " + OtherThingSerializer.CompactSchema.Id);
+
+        var hzoptions = new HazelcastOptionsBuilder()
+            .With(o =>
+            {
+                o.Networking.Addresses.Add("localhost:5701");
+
+                var compact = o.Serialization.Compact;
+
+                // register serializers - we want this in order to use
+                // the well-known polyglot type names and property names
+                compact.AddSerializer(new SomeThingSerializer());
+                compact.AddSerializer(new OtherThingSerializer());
+
+                // client is *not* going to fetch schemas from a server
+                // we have to provide them
+                //compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
+                //compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
+            })
+            .Build();
+
+        await using (var hzclient = await HazelcastClientFactory.StartNewClientAsync(hzoptions))
+        {
+            await using var hzmap = await hzclient.GetMapAsync<string, SomeThing>("temp-map");
+            await hzmap.SetAsync("key", new SomeThing()); // force the schema on the cluster
+        }
+
+        // now, the schema should be on the cluster
+        // when the gRPC service receives a SomeThing instance
+        // it will get the corresp schema from the server
+
         using var channel = GrpcChannel.ForAddress("http://localhost:5252");
         var grpc = new Transport.TransportClient(channel);
         var stream = grpc.invoke();

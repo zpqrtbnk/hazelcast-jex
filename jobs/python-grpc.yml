@@ -22,15 +22,8 @@ job:
             process:
               name: "python"
               work-directory: "{@python-any}"
-              # need a way to distinguish $PLATFORM here from replacement above
-              # {PLATFORM} ? but then how do we escape things?
-              #  $PLATFORM is a global replace that is replaced everywhere b4 yaml is parsed, \$ESCAPE
-              #  @resource is a reference to a resource, \@escape
-              #  {platform} is a runtime value, {{escape}}
-              args: # and we'll need a way to escape '@' too
+              args:
                 - "usercode-runtime.py"
-                #- "--platform={PLATFORM}"
-                #- "--uid={UID}"
                 - "--venv-name=venv"
                 - "--venv-path={@python-any}"
                 - "--grpc-port=5252"

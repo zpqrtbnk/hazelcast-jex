@@ -137,7 +137,8 @@ function build_demo_python () {
         mkdir $PUBLISH
         (
             cd grpc-runtime
-            find . -type f -name '*.py' -exec cp --parents {} $PUBLISH \;
+            #find . -type f -name '*.py' -exec cp --parents {} $PUBLISH \;
+            find . -type f -name '*.py' ! -name '__*' -exec cp {} $PUBLISH \;
         )
         (
             cd python-grpc

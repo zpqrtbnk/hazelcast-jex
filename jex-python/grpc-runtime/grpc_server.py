@@ -55,6 +55,7 @@ class TransportServicer(usercode_pb2_grpc.TransportServicer):
             logger.info(f'message {input_message.id}: {input_message.functionName}')
 
             if input_message.functionName == '.END':
+                context.client.shutdown()
                 yield input_message
                 break
 

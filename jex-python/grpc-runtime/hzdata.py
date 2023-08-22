@@ -52,7 +52,7 @@ class DeserializingMapEntry(MapEntry, IdentifiedDataSerializable):
     def get_value_data(self):
         if self.value_data is None and self.value is not None:
             self.value_data = self.to_data(self.value)
-        return self.key_data
+        return self.value_data
 
     def to_object(self, data):
         try:
@@ -83,7 +83,7 @@ class DeserializingMapEntry(MapEntry, IdentifiedDataSerializable):
         key_bytes = input.read_byte_array()
         value_bytes = input.read_byte_array()
         self.key_data = Data(key_bytes) if key_bytes is not None else None
-        self.key_value = Data(value_bytes) if value_bytes is not None else None
+        self.value_data = Data(value_bytes) if value_bytes is not None else None        
 
 class HzData:
     def get_factory_id():
