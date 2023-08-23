@@ -2,7 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-from generated import usercode_pb2 as usercode__pb2
+import usercode_pb2 as usercode__pb2
 
 class TransportStub(object):
     """Missing associated documentation comment in .proto file."""

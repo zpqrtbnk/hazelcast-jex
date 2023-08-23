@@ -61,7 +61,7 @@ def wrapper():
     print("in '%s'" % venv_path)
 
     # create the virtual environment, with PIP and upgraded dependencies
-    venv.create(venv_dir, True, True, with_pip = True, upgrade_deps = True)
+    venv.create(venv_dir, system_site_packages = True, clear = True, with_pip = True, upgrade_deps = True)
 
     # 'activate' the virtual environment and start again
     print("start process in virtual environment")

@@ -11,8 +11,8 @@ from concurrent import futures
 from hazelcast.config import Config
 from hazelcast import HazelcastClient
 
-from generated import usercode_pb2, usercode_pb2_grpc
-from usercode.UserCodeContext import UserCodeContext
+import usercode_pb2, usercode_pb2_grpc
+from UserCodeContext import UserCodeContext
 
 logger = logging.getLogger('Python PID %d' % os.getpid()) # fixme kill
 

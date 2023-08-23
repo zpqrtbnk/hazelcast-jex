@@ -1,5 +1,7 @@
 import threading
 
+# DELETE THIS FILE
+
 from hazelcast.client import _ClientContext, ProxyManager
 from hazelcast.cluster import ClusterService, _InternalClusterService
 from hazelcast.compact import CompactSchemaService
