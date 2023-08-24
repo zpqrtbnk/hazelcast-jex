@@ -171,6 +171,11 @@ function submit () {
     # demo submit grpc jobs/dotnet-grpc.yml
     # demo submit grpc jobs/python-grpc.yml
 
+    # but! should not use this anymore, instead do:
+    # clc job submit jobs/dotnet-shmem.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-shmem/publish/self-contained
+    # clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-grpc/publish/self-contained
+    # clc job submit jobs/python-grpc.yml DOTNET_DIR=$DEMO/jex-python/python-grpc/publish
+
     TRANSPORT=$1    
     SOURCE=$2
     if [ -z "$TRANSPORT" ]; then echo "transport?"; return; fi
