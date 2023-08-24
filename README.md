@@ -16,15 +16,23 @@ First, clone this repository, including its submodules:
 git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jex
 ```
 
-Then, follow the script to:
-* Edit the top of the demo.sh script with your details
-* Initialize the demo env with '. ./demo.sh'
-* Build the Hazelcast Java project with 'demo build-cluster'
-* Build the Hazelcast .NET client with 'demo build-demo'
-* Run a cluster with '$CLZ start'
-* Submit a job with 'demo submit'
-* Run an example to validate that the job is running with 'demo example'
-* Cancel the job with '$CLC job cancel my-job'
+Then, change to the `hazelcast-jex` directory and initialize the demo environment.
+Edit the lines at the top of the `demo.sh` to suit your environment, then run
+```sh
+. ./demo.sh init
+```
+
+This will give you the `demo` alias, amongst other things. Using this alias,
+* Build the Hazelcast Java project with `demo build-cluster`
+* Build the Hazelcast .NET client with `demo build-client-dotnet`
+* Build the Hazelcast .NET demo code with `demo build-demo-dotnet`
+* Build the Hazelcast Python demo code with `demo build-demo-python`
+
+Then,
+* Run a cluster with `clz start`
+* Submit a job with e.g. `demo submit grpc jobs/dotnet-grpc.yml` or directly `clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=./jex-dotnet/dotnet-grpc/publish/self-contained`
+* Verifiy that the job is running with `clc job list`
+* Run an example to validate that the job is running with `demo example`
 
 Requirements: Bash, Powershell (pwsh), .NET 7.
 
@@ -41,6 +49,8 @@ Found: example-key-20 = OtherThing(Value=__20__)
 The added entry has been added to the `streamed-map` map, which has journaling enabled.
 Thanks to journaling, the pipeline triggers and passes the entry value (a `SomeThing` object with an integer `Value` property) to the .NET transformation, which returns a transformed entry (a `OtherThing` object with a string `Value` property). The pipeline inserts this entry into a `result-map` map.
 The example code then tries to find this entry in the map.
+
+As of now, the jobs in `jobs/*.yml` rely on the "process" service, i.e. a service that starts the user code runtime as a separate process. We are currently working on the "container" service, which will start the user code runtime as a container. And there's a "passthru" service that should work provided that the service has been started manually beforehand.
 
 ## Viridian Demo
 
