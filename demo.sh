@@ -1,16 +1,19 @@
 
 function init () {
-    # initialize
-    export DEMO=/c/Users/sgay/Code/hazelcast-jex
-    export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn
+
+    # --- configure environment ---
+    export DEMO=/c/Users/sgay/Code/hazelcast-jex # path to the demo root
+    export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
     export CLUSTERADDR=localhost:5701
     export HZVERSION=5.4.0-SNAPSHOT
+    export LOGGING_LEVEL=DEBUG
+    # --- configure environment ---
+
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
-    export CLC='hazelcast-commandline-client/build/clc.exe --config $DEMO/temp/clc-config.yml'
+    export CLC="$DEMO/hazelcast-commandline-client/build/clc.exe --config $DEMO/temp/clc-config.yml"
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
-    export LOGGING_LEVEL=DEBUG
 
     if [ ! -d $DEMO/temp ]; then
         mkdir $DEMO/temp
@@ -38,7 +41,7 @@ function abspath () {
     (cd $(dirname $1); echo "$(pwd)/$(basename $1)")
 }
 
-# build the Hazelcast CLC project
+# build the Hazelcast CLC (Go) project
 function build_clc () {
     (cd hazelcast-commandline-client &&
         CLC_VERSION=UNKNOWN
@@ -52,18 +55,7 @@ function build_clc () {
         go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc)
 }
 
-function configure_clc () {    
-    # configure CLC
-    # FIXME there has to be a better way?!
-    cat <<EOF > $TEMP/clc-config.yml
-    cluster:
-    name: $CLUSTERNAME
-    address: $CLUSTERADDR
-EOF
-    $CLC config add $TEMP/clc-config.yml
-    rm $TEMP/clc-config.yml
-}
-
+# build the Hazelcast cluster (Java) project
 function build_cluster () {
     # build the Hazelcast project
     # includes the packages
@@ -74,6 +66,7 @@ function build_cluster () {
         unzip hazelcast-$HZVERSION.zip)
 }
 
+# build the Hazelcast .NET client project
 function build_client_dotnet () {
     # build the Hazelcast .NET client
     # includes the new Hazelcast.Net.Jet NuGet package
@@ -85,6 +78,7 @@ function build_client_dotnet () {
         rm -rf ~/.nuget/packages/hazelcast.net.usercode)
 }
 
+# build the various .NET projects used for the demo
 function build_demo_dotnet () {
 
     # build the demo code
@@ -125,6 +119,7 @@ function build_demo_dotnet () {
     )
 }
 
+# build the various Python resources used for the demo
 function build_demo_python () {
 
     (
@@ -148,6 +143,8 @@ function build_demo_python () {
     )
 }
 
+# executes the python runtime as a process
+# can be useful to test with the passthru runtime service
 function runtime_python () {
 
     (
@@ -157,6 +154,8 @@ function runtime_python () {
     )
 }
 
+# executes the .NET+gRPC runtime as a process
+# can be useful to test with the passthru runtime service
 function runtime_dotnet_grpc () {
     (
         cd jex-dotnet/dotnet-grpc
@@ -164,6 +163,11 @@ function runtime_dotnet_grpc () {
     )
 }
 
+# submit jobs, the .NET way - OBSOLETE - should use the CLC now
+# e.g.:
+# clc job submit jobs/dotnet-shmem.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-shmem/publish/self-contained
+# clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-grpc/publish/self-contained
+# clc job submit jobs/python-grpc.yml PYTHON_DIR=$DEMO/jex-python/python-grpc/publish
 function submit () {
 
     # examples
@@ -171,10 +175,6 @@ function submit () {
     # demo submit grpc jobs/dotnet-grpc.yml
     # demo submit grpc jobs/python-grpc.yml
 
-    # but! should not use this anymore, instead do:
-    # clc job submit jobs/dotnet-shmem.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-shmem/publish/self-contained
-    # clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-grpc/publish/self-contained
-    # clc job submit jobs/python-grpc.yml DOTNET_DIR=$DEMO/jex-python/python-grpc/publish
 
     TRANSPORT=$1    
     SOURCE=$2
@@ -202,6 +202,9 @@ function submit () {
     )
 }
 
+# run the demo example
+# will put stuff into a map and expect stuff to appear in another map
+# magic
 function example () {
 
     # run the example
@@ -211,6 +214,7 @@ function example () {
             --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR)
 }
 
+# run a gRPC test client
 function test_grpc () {
     (
         cd jex-dotnet/dotnet-grpc-client

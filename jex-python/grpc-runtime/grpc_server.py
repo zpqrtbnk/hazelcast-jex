@@ -36,13 +36,20 @@ class TransportServicer(usercode_pb2_grpc.TransportServicer):
         payload = context.to_byte_array(result)
         return usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName=input_message.functionName, payload=bytes(payload))
     
-    def create_context(self):
+    def create_context(self, connectArgs:str):
         config = Config()
         config.cluster_connect_timeout = 4 # fixme make this an option
         configure_client(config)
         config.data_serializable_factories[HzData.get_factory_id()] = HzData.get_factory()
-        config.cluster_name = "dev" # should come...
-        config.cluster_members.append("localhost:5701") # should come from the .CONNECT payload + stuff
+
+        connectArgsItems = connectArgs.split(';')
+        #config.cluster_name = connectArgs[pos+1:]
+        #config.cluster_members.append(connectArgs[:pos])
+        config.cluster_name = connectArgsItems[2]
+        cluster_address = connectArgsItems[0] + ':' + connectArgsItems[1]
+        config.cluster_members.append(cluster_address)
+        logger.info(f"connect to cluster {config.cluster_name} at address {cluster_address} (from: '{connectArgs}')")
+
         config.smart_routing = False
         client = HazelcastClient(config)
         context = UserCodeContext(client)
@@ -61,8 +68,9 @@ class TransportServicer(usercode_pb2_grpc.TransportServicer):
 
             if input_message.functionName == '.CONNECT':
                 if context is None:
-                    try:
-                        context = self.create_context() # FIXME args
+                    try:                        
+                        connectArgs = input_message.payload.decode('ascii')
+                        context = self.create_context(connectArgs)
                     except:
                         yield usercode_pb2.UserCodeGrpcMessage(id=input_message.id, functionName='.ERROR', payload=traceback.format_exc().encode('utf-8'))
                 yield input_message

@@ -37,11 +37,12 @@ job:
 
           # user code runtime parameters
           runtime: 
-            process:
-              path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
-              name: "dotnet-grpc"
-              args:
-                - "--usercode:grpc:port=5252"
+            service:
+              process:
+                path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
+                name: "dotnet-grpc"
+                args:
+                  - "--usercode:grpc:port=5252"
             transport: 
               grpc:
                 port: 5252

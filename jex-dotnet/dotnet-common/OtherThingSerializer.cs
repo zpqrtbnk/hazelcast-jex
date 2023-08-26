@@ -19,11 +19,6 @@ namespace Hazelcast.Demo;
 
 public class OtherThingSerializer : CompactSerializerBase<OtherThing>
 {
-    public static readonly Schema CompactSchema = SchemaBuilder
-        .For("other-thing")
-        .WithField("value", FieldKind.String)
-        .Build();
-
     public override string TypeName => "other-thing";
 
     public override OtherThing Read(ICompactReader reader)

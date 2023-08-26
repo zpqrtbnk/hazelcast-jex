@@ -37,12 +37,13 @@ job:
 
           # user code runtime parameters
           runtime: 
-            process:
-              path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
-              name: "dotnet-shmem"
-              args:
-                - "--usercode:uid={UID}"
-                - "--Logging:LogLevel:Hazelcast=debug"
+            service:
+              process:
+                path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
+                name: "dotnet-shmem"
+                args:
+                  - "--usercode:uid={UID}"
+                  - "--Logging:LogLevel:Hazelcast=debug"
             transport: shared-memory
 
           # user code function name

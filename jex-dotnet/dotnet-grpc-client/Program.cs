@@ -13,10 +13,6 @@ public class Program
 {
     public static async Task Main()
     {
-        Console.WriteLine("Schemas:");
-        Console.WriteLine("  SomeThing: " + SomeThingSerializer.CompactSchema.Id);
-        Console.WriteLine("  OtherThing: " + OtherThingSerializer.CompactSchema.Id);
-
         var hzoptions = new HazelcastOptionsBuilder()
             .With(o =>
             {
@@ -28,14 +24,11 @@ public class Program
                 // the well-known polyglot type names and property names
                 compact.AddSerializer(new SomeThingSerializer());
                 compact.AddSerializer(new OtherThingSerializer());
-
-                // client is *not* going to fetch schemas from a server
-                // we have to provide them
-                //compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
-                //compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
             })
             .Build();
 
+        // FIXME understand
+        // both the runtime and the client know about the serializers
         await using (var hzclient = await HazelcastClientFactory.StartNewClientAsync(hzoptions))
         {
             await using var hzmap = await hzclient.GetMapAsync<string, SomeThing>("temp-map");
@@ -53,7 +46,7 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .CONNECT");
-        var connectMessage = new UserCodeMessage(id++, ".CONNECT", "localhost:5701"); // FIXME args?!
+        var connectMessage = new UserCodeMessage(id++, ".CONNECT", "localhost;5701;dev");
         await stream.RequestStream.WriteAsync(connectMessage.ToGrpcMessage());
         await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
         var response = stream.ResponseStream.Current.ToMessage();
@@ -82,7 +75,8 @@ public class Program
         }
 
         Console.WriteLine("--------");
-        Console.WriteLine("send: doThingPython");
+        string function = "doThingDotnet"; // doThingPython
+        Console.WriteLine("send: " + function);
         var random = Random.Shared.Next(0, 100);
         var someThing= new SomeThing { Value = random };
         var input = IMapEntry.New($"key-{random}", someThing);
@@ -96,17 +90,12 @@ public class Program
                 // well-known polyglot type-name and property names
                 compact.AddSerializer(new SomeThingSerializer());
                 compact.AddSerializer(new OtherThingSerializer());
-
-                // client is *not* going to fetch schemas from a server
-                // we have to provide them
-                compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
-                compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
             })
             .Build();
-        var client = new UserCodeClient(hazelcastOptions); // or pass the configure delegate?
+        var client = await UserCodeClient.StartNew(hazelcastOptions); // or pass the configure delegate?
 
-        var payload = client.ToByteArray(input);
-        var message = new UserCodeMessage(id++, "doThingPython", payload);
+        var payload = await client.ToByteArray(input);
+        var message = new UserCodeMessage(id++, function, payload);
         await stream.RequestStream.WriteAsync(message.ToGrpcMessage());
         await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)); // FIXME use everywhere!
         response = stream.ResponseStream.Current.ToMessage();
@@ -117,7 +106,7 @@ public class Program
             return;
         }
 
-        var result = client.ToObject(response.PayloadBytes);
+        var result = await client.ToObject<object>(response.PayloadBytes);
         Console.WriteLine("result:");
         Console.WriteLine(result);
         if (result is IMapEntry mapEntry)

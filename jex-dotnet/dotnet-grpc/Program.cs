@@ -76,11 +76,6 @@ public class Program
                 // well-known polyglot type-name and property names
                 compact.AddSerializer(new SomeThingSerializer());
                 compact.AddSerializer(new OtherThingSerializer());
-
-                // client is *not* going to fetch schemas from a server
-                // we have to provide them
-                compact.SetSchema<SomeThing>(SomeThingSerializer.CompactSchema, true);
-                compact.SetSchema<OtherThing>(OtherThingSerializer.CompactSchema, true);
             });
     }
 
@@ -89,7 +84,7 @@ public class Program
     // generic one... unless we make the wrapper a plain struct? but still the server would
     // need to know how to go from non-generic to generic = how?
 
-    private static IMapEntry DoThing(IMapEntry input, UserCodeContext context)
+    private static ValueTask<IMapEntry> DoThing(IMapEntry input, UserCodeContext context)
     {
         var (key, value) = input.Of<string, SomeThing>();
 
@@ -100,6 +95,6 @@ public class Program
 
         context.Logger.LogDebug($"doThingDotnet: output key={key}, value={result}.");
 
-        return IMapEntry.New(key, result);
+        return new ValueTask<IMapEntry>(IMapEntry.New(key, result));
     }
 }

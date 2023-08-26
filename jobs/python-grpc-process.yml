@@ -1,0 +1,48 @@
+job:
+  name: my-job
+  resources:
+    - id: python-any
+      platform: any
+      type: DIRECTORY
+      path: "$PYTHON_DIR/any"
+  pipeline:
+    - pipeline:
+        - source: map-journal
+          map-name: "streamed-map"
+          journal-initial-position: START_FROM_CURRENT
+          timestamp: INGESTION
+
+        # transform using user code
+        - transform: user-code
+
+          # user code runtime parameters
+          runtime: 
+            process:
+              name: "python"
+              work-directory: "{@python-any}"
+              args:
+                - "usercode-runtime.py"
+                - "--venv-name=venv"
+                - "--venv-path={@python-any}"
+                - "--grpc-port=5252"
+            transport: 
+              grpc:
+                port: 5252
+            #mode: process
+            #process-path: "@python-$PLATFORM" # absolute path, or @resource
+            #process-name: "python"
+            ##transport: shared-memory
+            #transport: grpc
+            #transport-port: 5252
+
+          # user code function name
+          function: doThingPython
+
+          # transform parameters
+          name: python-transform
+          parallel-processors: 1
+          parallel-operations: 1
+          preserve-order: true
+
+        - sink: map
+          map-name: "result-map"

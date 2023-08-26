@@ -17,25 +17,10 @@ job:
 
           # user code runtime parameters
           runtime: 
-            container:
-              image: "hazelcast/my-image:latest"
-            process:
-              name: "python"
-              work-directory: "{@python-any}"
-              args:
-                - "usercode-runtime.py"
-                - "--venv-name=venv"
-                - "--venv-path={@python-any}"
-                - "--grpc-port=5252"
+            service: passthru
             transport: 
               grpc:
                 port: 5252
-            #mode: process
-            #process-path: "@python-$PLATFORM" # absolute path, or @resource
-            #process-name: "python"
-            ##transport: shared-memory
-            #transport: grpc
-            #transport-port: 5252
 
           # user code function name
           function: doThingPython
