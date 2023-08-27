@@ -9,7 +9,18 @@ and .NET or Python using either gRPC, or a fast shared-memory IPC mechanism.
 
 ## Demo
 
-The entire demonstration is scripted in the `./demo.sh` shell script.
+The entire demonstration is scripted via the `./demo.sh` shell script.
+
+### Requirements
+
+You will need 
+* Bash (`demo.sh` is a Bash script)
+* Powershell (pwsh, required to build the .NET client)
+* .NET 7 (to run the .NET client)
+* Python 3.9+ (to run the Python examples) with PIP
+* Go 1.16+ (to build the CLC)
+
+### Build
 
 First, clone this repository, including its submodules:
 ```sh
@@ -27,14 +38,15 @@ This will give you the `demo` alias, amongst other things. Using this alias,
 * Build the Hazelcast .NET client with `demo build-client-dotnet`
 * Build the Hazelcast .NET demo code with `demo build-demo-dotnet`
 * Build the Hazelcast Python demo code with `demo build-demo-python`
+* Build the Hazelcast Command Line Client project with `demo build-clc`
+
+### Demo
 
 Then,
 * Run a cluster with `clz start`
 * Submit a job with e.g. `demo submit grpc jobs/dotnet-grpc.yml` or directly `clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=./jex-dotnet/dotnet-grpc/publish/self-contained`
 * Verifiy that the job is running with `clc job list`
 * Run an example to validate that the job is running with `demo example`
-
-Requirements: Bash, Powershell (pwsh), .NET 7.
 
 The example *should* produce something like:
 ```text
@@ -51,6 +63,13 @@ Thanks to journaling, the pipeline triggers and passes the entry value (a `SomeT
 The example code then tries to find this entry in the map.
 
 As of now, the jobs in `jobs/*.yml` rely on the "process" service, i.e. a service that starts the user code runtime as a separate process. We are currently working on the "container" service, which will start the user code runtime as a container. And there's a "passthru" service that should work provided that the service has been started manually beforehand.
+
+## What's not working
+
+These are being investigated...
+
+* Python logs do not bubble up to Java logs correctly
+* Jet resource directories must be flat and that is a pain, can it be fixed?
 
 ## Viridian Demo
 

@@ -8,11 +8,12 @@ function init () {
     export CLUSTERADDR=localhost:5701
     export HZVERSION=5.4.0-SNAPSHOT
     export LOGGING_LEVEL=DEBUG
+    export PYTHON=python # or python3 on linux
     # --- configure environment ---
 
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
-    export CLC="$DEMO/hazelcast-commandline-client/build/clc.exe --config $DEMO/temp/clc-config.yml"
+    export CLC="$DEMO/hazelcast-commandline-client/build/clc --config $DEMO/temp/clc-config.yml"
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
 
     if [ ! -d $DEMO/temp ]; then
@@ -51,8 +52,11 @@ function build_clc () {
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
-        go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc &&
-        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc)
+        if [ "$OSTYPE" == "msys "]; then
+            go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
+        fi
+        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc
+    )
 }
 
 # build the Hazelcast cluster (Java) project
@@ -150,7 +154,7 @@ function runtime_python () {
     (
         VENV_PATH=$PWD/temp
         cd jex-python/python-grpc/publish/any
-        python usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
+        $PYTHON usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
     )
 }
 
