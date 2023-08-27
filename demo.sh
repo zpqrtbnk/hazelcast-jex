@@ -2,8 +2,8 @@
 function init () {
 
     # --- configure environment ---
-    export DEMO=/home/sgay/shared/hazelcast-jex # path to the demo root
-    export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
+    export DEMO=/c/Users/sgay/Code/hazelcast-jex # path to the demo root
+    export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
     export CLUSTERADDR=localhost:5701
     export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
@@ -15,7 +15,7 @@ function init () {
 
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
-    export CLC="$DEMO/hazelcast-commandline-client/build/clc.exe --config $DEMO/temp/clc-config.yml"
+    export CLC="$DEMO/hazelcast-commandline-client/build/clc --config $DEMO/temp/clc-config.yml"
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
 	export PYTHON=python3 # linux
 	if [ "$OSTYPE" == "msys " ]; then
@@ -58,9 +58,11 @@ function build_clc () {
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
-        #go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
+        if [ "$OSTYPE" == "msys "]; then
+            go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
+        fi
         go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc
-	)
+    )
 }
 
 # build the Hazelcast cluster (Java) project
