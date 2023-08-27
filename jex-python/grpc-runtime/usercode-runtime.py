@@ -5,7 +5,6 @@ import pip
 import site
 import subprocess
 import argparse
-import grpc_server
 import importlib
 import logging
 
@@ -65,15 +64,22 @@ def wrapper():
 
     # 'activate' the virtual environment and start again
     print("start process in virtual environment")
+    
+    # windows?
     python_path = os.path.join(venv_dir, 'Scripts', 'python.exe')
+    if not os.path.isfile(python_path):
+        # linux
+        python_path = os.path.join(venv_dir, 'bin', 'python3')
+    if not os.path.isfile(python_path):
+        # muh?
+        print("panic: '%s' does not exist" % python_path)
+        sys.exit(1)
+    
     script_path = __file__
     print("run '%s'" % script_path)
     os.chdir(venv_dir)
     print("in cwd = '%s'" % os.getcwd())
     print("with python = '%s'" % python_path)    
-    if not os.path.isfile(python_path):
-        print("panic: '%s' does not exist" % python_path)
-        sys.exit(1)
 
     # Windows has no support for exec*, spanws a child process and terminate the current one
     #os.execv(python_path, [python_path, work_path])
@@ -119,6 +125,7 @@ def run_pip(*pip_args):
 
 def service():
     print("start grpc server")
+    import grpc_server
     grpc_server.serve(grpc_port)
 
 def process():
@@ -135,20 +142,21 @@ def process():
     if rc != 0:
         sys.exit(1)
 
-    # find usercode module - without loading it! - but really we should do better
-    module_name = 'usercode-functions'
-    try:
-        #module = importlib.import_module(module_name)
-        spec = importlib.util.find_spec(module_name)
-    except ImportError as e:
-        raise RuntimeError("Cannot import module '%s'" % module_name, e)
-    if spec is None:
-        print("failed to find module '%s'" % module_name)
-    #print(spec)
-    #print("found usercode-functions at '%s'" % os.path.abspath(module.__file__))
-    #print("found usercode-functions at '%s'" % os.path.abspath(spec.submodule_search_locations[0]))
-    print("found usercode-functions at '%s'" % os.path.abspath(spec.origin))
-    home = os.path.dirname(spec.origin) # better way to find it?
+    # find usercode module - without loading it! - but really we should do better  
+#    module_name = 'usercode-functions'
+#    try:
+#        #module = importlib.import_module(module_name)
+#        spec = importlib.util.find_spec(module_name)
+#    except ImportError as e:
+#        raise RuntimeError("Cannot import module '%s'" % module_name, e)
+#    if spec is None:
+#        print("failed to find module '%s'" % module_name)
+#    #print(spec)
+#    #print("found usercode-functions at '%s'" % os.path.abspath(module.__file__))
+#    #print("found usercode-functions at '%s'" % os.path.abspath(spec.submodule_search_locations[0]))
+#    print("found usercode-functions at '%s'" % os.path.abspath(spec.origin))
+#    home = os.path.dirname(spec.origin) # better way to find it?
+    home = os.path.dirname(__file__)
 
     # install custom dependencies
     requirements = os.path.join(home, "requirements.txt")

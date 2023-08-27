@@ -129,7 +129,8 @@ def serve(port):
         TransportServicer(functions),
         server
     )
-    server.add_insecure_port('localhost:%d' % int(port))
+    #server.add_insecure_port('localhost:%d' % int(port))
+    server.add_insecure_port('[::]:%d' % int(port))
     print("serve on port %s" % port)
     print("for now, type 'stop' in stdin, we'll change this later")
     server.start()

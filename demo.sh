@@ -2,18 +2,25 @@
 function init () {
 
     # --- configure environment ---
-    export DEMO=/c/Users/sgay/Code/hazelcast-jex # path to the demo root
-    export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn # name of Maven executable, can be 'mvn' or a full path
+    export DEMO=/home/sgay/shared/hazelcast-jex # path to the demo root
+    export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
     export CLUSTERADDR=localhost:5701
-    export HZVERSION=5.4.0-SNAPSHOT
+    export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
+	export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
     export LOGGING_LEVEL=DEBUG
+	export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
+	export DOCKER_NETWORK=jex # the network name for our demo
     # --- configure environment ---
 
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
     export CLC="$DEMO/hazelcast-commandline-client/build/clc.exe --config $DEMO/temp/clc-config.yml"
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
+	export PYTHON=python3 # linux
+	if [ "$OSTYPE" == "msys " ]; then
+		export PYTHON=python # windows
+	fi
 
     if [ ! -d $DEMO/temp ]; then
         mkdir $DEMO/temp
@@ -51,8 +58,9 @@ function build_clc () {
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
-        go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc &&
-        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc)
+        #go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
+        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc
+	)
 }
 
 # build the Hazelcast cluster (Java) project
@@ -150,7 +158,7 @@ function runtime_python () {
     (
         VENV_PATH=$PWD/temp
         cd jex-python/python-grpc/publish/any
-        python usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
+        $PYTHON usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
     )
 }
 
@@ -161,6 +169,58 @@ function runtime_dotnet_grpc () {
         cd jex-dotnet/dotnet-grpc
         dotnet run
     )
+}
+
+# builds docker images
+function build-docker () {
+
+	docker network ls | grep -q $DOCKER_NETWORK
+	if [ $? -eq 1 ]; then
+		docker network create $DOCKER_NETWORK
+	fi
+	
+	# build python image
+	docker build \
+		-t $DOCKER_REPOSITORY/jet-python-grpc:latest \
+		-f jobs/python-grpc-container.dockerfile \
+		jex-python/python-grpc/publish/any	
+		
+	# cannot run that bare one, need to add our own Java code
+	docker pull hazelcast/hazelcast:$HZVERSION_DOCKER
+	
+	# build hazelcast image
+	# from an existing official version (HZVERSION_DOCKER)
+	# which we overwrite with our temp version (HZVERSION) files
+	docker build \
+		-t $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER \
+		-f jobs/hazelcast.dockerfile \
+		--build-arg="HZVERSION=$HZVERSION_DOCKER" \
+		hazelcast/distribution/target/hazelcast-$HZVERSION/lib
+}
+
+# runs the docker member
+function run-docker-member () {
+
+	docker run --rm -it --net jex \
+		-v $DEMO/hazelcast-cluster.xml:/opt/hazelcast/hazelcast.xml \
+		-p 5701:5701 \
+		--name member0 -h member0 \
+		-e HAZELCAST_CONFIG=hazelcast.xml \
+		-e HZ_CLUSTERNAME=dev \
+		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
+}
+
+# runs the docker runtime (for passthru)
+function run-docker-runtime () {
+
+	# BEWARE!
+	# the job yaml need to be updated to specify the grpc.address=runtime
+	# so that Java knows where to reach the Python gRPC runtime server
+
+	docker run --rm -it --net jex \
+		-p 5252:5252 \
+		--name runtime -h runtime \
+		$DOCKER_REPOSITORY/jet-python-grpc
 }
 
 # submit jobs, the .NET way - OBSOLETE - should use the CLC now
@@ -239,6 +299,12 @@ function test_grpc () {
 # https://www.thegeekstuff.com/2010/05/bash-shell-special-parameters/
 
 CMDS=$1
+
+if [ -z "$CMDS" ]; then
+	echo "Uh, what am I supposed to do?"
+	exit
+fi
+
 shift
 for cmd in $(IFS=,;echo $CMDS); do
     cmd=${cmd//-/_}

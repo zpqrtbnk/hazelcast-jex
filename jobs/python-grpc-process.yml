@@ -16,25 +16,20 @@ job:
         - transform: user-code
 
           # user code runtime parameters
-          runtime: 
-            process:
-              name: "python"
-              work-directory: "{@python-any}"
-              args:
-                - "usercode-runtime.py"
-                - "--venv-name=venv"
-                - "--venv-path={@python-any}"
-                - "--grpc-port=5252"
+          runtime:
+            service:
+              process:
+                name: "python3" # python (windows) or python3 (linux)
+                work-directory: "{@python-any}"
+                args:
+                  - "usercode-runtime.py"
+                  - "--venv-name=venv"
+                  - "--venv-path={@python-any}"
+                  - "--grpc-port=5252"
             transport: 
               grpc:
                 port: 5252
-            #mode: process
-            #process-path: "@python-$PLATFORM" # absolute path, or @resource
-            #process-name: "python"
-            ##transport: shared-memory
-            #transport: grpc
-            #transport-port: 5252
-
+  
           # user code function name
           function: doThingPython
 
