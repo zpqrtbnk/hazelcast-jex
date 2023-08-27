@@ -186,6 +186,12 @@ function build_docker () {
 		-t $DOCKER_REPOSITORY/jet-python-grpc:latest \
 		-f jobs/python-grpc-container.dockerfile \
 		jex-python/python-grpc/publish/any	
+
+	# build dotnet image
+	docker build \
+		-t $DOCKER_REPOSITORY/jet-dotnet-grpc:latest \
+		-f jobs/dotnet-grpc-container.dockerfile \
+		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
 		
 	# cannot run that bare one, need to add our own Java code
 	docker pull hazelcast/hazelcast:$HZVERSION_DOCKER
@@ -200,6 +206,9 @@ function build_docker () {
 		hazelcast/distribution/target/hazelcast-$HZVERSION/lib
 }
 
+# NOTE
+# add --entrypoint /bin/bash to override entrypoint!
+
 # runs the docker member
 function run_docker_member () {
 
@@ -213,7 +222,7 @@ function run_docker_member () {
 }
 
 # runs the docker python runtime (for passthru)
-function run_docker_runtime () {
+function run_docker_runtime_python () {
 
 	# BEWARE!
 	# the job yaml need to be updated to specify the grpc.address=runtime
@@ -223,6 +232,25 @@ function run_docker_runtime () {
 		-p 5252:5252 \
 		--name runtime -h runtime \
 		$DOCKER_REPOSITORY/jet-python-grpc
+}
+
+function run_docker_runtime_dotnet () {
+
+	# BEWARE! 
+	# (see python)
+
+	docker run --rm -it --net jex \
+		-p 5252:5252 \
+		--name runtime -h runtime \
+		$DOCKER_REPOSITORY/jet-dotnet-grpc
+}
+
+# runs a temp sh
+function run_docker_sh () {
+
+	docker run -it --rm --net jex \
+		--name tempsh -h tempsh \
+		busybox sh
 }
 
 # submit jobs, the .NET way - OBSOLETE - should use the CLC now
