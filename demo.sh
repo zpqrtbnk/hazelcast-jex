@@ -2,8 +2,8 @@
 function init () {
 
     # --- configure environment ---
-    export DEMO=/c/Users/sgay/Code/hazelcast-jex # path to the demo root
-    export MVN=$DEMO/../mvn/apache-maven-3.8.1/bin/mvn # name of Maven executable, can be 'mvn' or a full path
+    export DEMO=/home/sgay/shared/hazelcast-jex # path to the demo root
+    export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
     export CLUSTERADDR=localhost:5701
     export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
@@ -174,7 +174,7 @@ function runtime_dotnet_grpc () {
 }
 
 # builds docker images
-function build-docker () {
+function build_docker () {
 
 	docker network ls | grep -q $DOCKER_NETWORK
 	if [ $? -eq 1 ]; then
@@ -201,7 +201,7 @@ function build-docker () {
 }
 
 # runs the docker member
-function run-docker-member () {
+function run_docker_member () {
 
 	docker run --rm -it --net jex \
 		-v $DEMO/hazelcast-cluster.xml:/opt/hazelcast/hazelcast.xml \
@@ -212,8 +212,8 @@ function run-docker-member () {
 		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 }
 
-# runs the docker runtime (for passthru)
-function run-docker-runtime () {
+# runs the docker python runtime (for passthru)
+function run_docker_runtime () {
 
 	# BEWARE!
 	# the job yaml need to be updated to specify the grpc.address=runtime

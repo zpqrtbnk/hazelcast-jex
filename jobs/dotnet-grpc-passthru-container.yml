@@ -1,0 +1,62 @@
+job:
+
+  name: my-job
+
+  # resources that are going to be uploaded to the member
+  # 'path' is the path local to the submitting environment, where to find the resource
+  # '%XXX%'' variables are replaced before the yml content is processed
+  # FIXME replace with $DOTNET_DIR and then escape $ as $$
+  resources:
+    - id: dotnet-linux-x64
+      platform: linux-x64
+      path: "$DOTNET_DIR/linux-x64"
+      type: DIRECTORY      
+    - id: dotnet-win-x64
+      platform: win-x64
+      path: "$DOTNET_DIR/win-x64"
+      type: DIRECTORY
+    - id: dotnet-osx-arm64
+      platform: osx-arm64
+      path: "$DOTNET_DIR/osx-arm64"
+      type: DIRECTORY
+
+  # define the pipeline
+  pipeline:
+
+    # from root...
+    - pipeline:
+
+        # source from a map journal
+        - source: map-journal
+          map-name: "streamed-map"
+          journal-initial-position: START_FROM_CURRENT
+          timestamp: INGESTION
+
+        # transform using user code
+        - transform: user-code
+
+          # user code runtime parameters
+          runtime: 
+            service:
+              process:
+                path: "{@dotnet-{PLATFORM}}" # absolute path, or @resource
+                name: "dotnet-grpc"
+                args:
+                  - "--usercode:grpc:port=5252"
+            transport: 
+              grpc:
+                address: runtime
+                port: 5252
+
+          # user code function name
+          function: doThingDotnet
+
+          # transform parameters
+          name: dotnet-transform
+          parallel-processors: 1
+          parallel-operations: 1
+          preserve-order: true
+
+        # sink into a map
+        - sink: map
+          map-name: "result-map"

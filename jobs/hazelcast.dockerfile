@@ -5,12 +5,12 @@ FROM hazelcast/hazelcast:$HZVERSION
 # copy from distribution to /opt/hazelcast/lib
 COPY *.jar /opt/hazelcast/lib/
 
-# FIXME how can it be available in RUN command?
-#ENV HZVERSION=$HZVERSION
-
-# remove files from base image
+# remove files from base image (must be user root)
 USER root
+
 # args need to be requested at every stage, lol
 ARG HZVERSION
 RUN rm /opt/hazelcast/lib/hazelcast*-$HZVERSION.jar
+
+# restore user
 USER hazelcast
