@@ -1,10 +1,5 @@
 job:
   name: my-job
-  resources:
-    - id: python-any
-      platform: any
-      type: DIRECTORY
-      path: "$PYTHON_DIR/any"
   pipeline:
     - pipeline:
         - source: map-journal
@@ -19,7 +14,7 @@ job:
           runtime: 
             service:
               container:
-                image: "hazelcast/my-image:latest"
+                image: zpqrtbnk/jet-dotnet-grpc:latest
             transport: 
               grpc:
                 port: 5252

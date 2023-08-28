@@ -207,7 +207,7 @@ function build_docker () {
 }
 
 # NOTE
-# add --entrypoint /bin/bash to override entrypoint!
+# add --entrypoint /bin/bash to override entrypoint and inspect the container!
 
 # runs the docker member
 function run_docker_member () {
@@ -218,6 +218,8 @@ function run_docker_member () {
 		--name member0 -h member0 \
 		-e HAZELCAST_CONFIG=hazelcast.xml \
 		-e HZ_CLUSTERNAME=dev \
+		-e HZ_RUNTIME_CONTROLLER_ADDRESS=10.106.74.139 \
+		-e HZ_RUNTIME_CONTROLLER_PORT=50051 \
 		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 }
 
