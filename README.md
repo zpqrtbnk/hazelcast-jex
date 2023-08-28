@@ -15,10 +15,11 @@ The entire demonstration is scripted via the `./demo.sh` shell script.
 
 You will need 
 * Bash (`demo.sh` is a Bash script)
-* Powershell (pwsh, required to build the .NET client)
+* Powershell (i.e. `pwsh`, required to build the .NET client)
 * .NET 7 (to run the .NET client)
 * Python 3.9+ (to run the Python examples) with PIP
 * Go 1.16+ (to build the CLC)
+* Docker (in order to run the container demo)
 
 ### Build
 
@@ -39,12 +40,13 @@ This will give you the `demo` alias, amongst other things. Using this alias,
 * Build the Hazelcast .NET demo code with `demo build-demo-dotnet`
 * Build the Hazelcast Python demo code with `demo build-demo-python`
 * Build the Hazelcast Command Line Client project with `demo build-clc`
+* Build the Docker images with `demo build-docker`
 
 ### Demo
 
 Then,
 * Run a cluster with `clz start`
-* Submit a job with e.g. `demo submit grpc jobs/dotnet-grpc.yml` or directly `clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=./jex-dotnet/dotnet-grpc/publish/self-contained`
+* Submit a job with e.g. `clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=./jex-dotnet/dotnet-grpc/publish/self-contained`
 * Verifiy that the job is running with `clc job list`
 * Run an example to validate that the job is running with `demo example`
 
@@ -62,7 +64,10 @@ The added entry has been added to the `streamed-map` map, which has journaling e
 Thanks to journaling, the pipeline triggers and passes the entry value (a `SomeThing` object with an integer `Value` property) to the .NET transformation, which returns a transformed entry (a `OtherThing` object with a string `Value` property). The pipeline inserts this entry into a `result-map` map.
 The example code then tries to find this entry in the map.
 
-As of now, the jobs in `jobs/*.yml` rely on the "process" service, i.e. a service that starts the user code runtime as a separate process. We are currently working on the "container" service, which will start the user code runtime as a container. And there's a "passthru" service that should work provided that the service has been started manually beforehand.
+Depending on the `jobs/*.yml` file that you use, a different service can be used:
+* The "process" service starts the user code runtime as a separate process.
+* The "passthru" service assumes you have started the runtime already.
+* The "container" service (work-in-progress) starts the user code runtime as a container.
 
 ## What's not working
 
@@ -70,6 +75,17 @@ These are being investigated...
 
 * Python logs do not bubble up to Java logs correctly
 * Jet resource directories must be flat and that is a pain, can it be fixed?
+* Currently not implementing batches, only streaming, so?
+
+More work to do:
+* Implement more Yaml support (for Kafka etc)
+* Implement the existing Python ML example as a Yaml pipeline
+* Implement a .COPYTO function to copy files to a running runtime
+* General work on securing the communication between member & runtime
+* Java should test for python+pip presence, but how?
+* Must verify that in container mode we pass the right address to grpc
+
+In addition, most of the codebase is POC-quality and needs to be revisited, cleaned up, etc.
 
 ## Viridian Demo
 
