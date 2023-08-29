@@ -40,6 +40,12 @@ EOF
     alias clz=$CLZ
     alias clc=$CLC
 	alias helm=$HELM
+	
+	export DEMO_COMMANDS=$(grep -E '^function\s[A-Za-z0-9_]*\s' demo.sh \
+	                       | cut -d " " -f 2\
+						   | grep -E -v 'abspath|init' \
+						   )
+	complete -F _demo demo
 
 	echo "configured with:"
 	echo "    member at $CLUSTERADDR"
@@ -49,6 +55,18 @@ EOF
     echo "    clz:  invokes the cluster hz script"
     echo "enjoy!"
     echo ""
+}
+
+function _demo() {
+	local cur
+    # COMP_WORDS is an array containing all individual words in the current command line
+    # COMP_CWORD is the index of the word contianing the current cursor position
+    # COMPREPLY is an array variable from which bash reads the possible completions
+    cur=${COMP_WORDS[COMP_CWORD]}
+    COMPREPLY=()
+    # compgen returns the array of elements from $DEMO_COMMANDS matching the current word
+    COMPREPLY=( $( compgen -W "$DEMO_COMMANDS" -- $cur ) )
+    return 0
 }
 
 function abspath () {
@@ -186,7 +204,7 @@ function build_docker_python () {
 	# build python image
 	docker build \
 		-t $DOCKER_REPOSITORY/jet-python-grpc:latest \
-		-f jobs/python-grpc-container.dockerfile \
+		-f jobs/python-container-grpc.dockerfile \
 		jex-python/python-grpc/publish/any	
 		
 	# for k8 to find it?
@@ -199,7 +217,7 @@ function build_docker_dotnet () {
 	# build dotnet image
 	docker build \
 		-t $DOCKER_REPOSITORY/jet-dotnet-grpc:latest \
-		-f jobs/dotnet-grpc-container.dockerfile \
+		-f jobs/dotnet-container-grpc.dockerfile \
 		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
 }
 
@@ -285,7 +303,7 @@ function k8_start_member () {
 	#kubectl apply -f k8/service-hz-hazelcast.yaml
 	#kubectl apply -f k8/pod-hz-hazelcast.yaml
 	$HELM install hazelcast hzcharts/hazelcast \
-		-f k8/member-values.yaml
+		-f jobs/member-values.yaml
 	
 	# no idea how to get these to work => coded into values.yaml	
 	#--set env.enabled=true \

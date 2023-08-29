@@ -1,10 +1,5 @@
 job:
   name: my-job
-  resources:
-    - id: python-any
-      platform: any
-      type: DIRECTORY
-      path: "$PYTHON_DIR/any"
   pipeline:
     - pipeline:
         - source: map-journal
@@ -21,6 +16,8 @@ job:
             transport: 
               grpc:
                 port: 5252
+                # passthru to docker = need to specify address (better than IP)
+                address: runtime
 
           # user code function name
           function: doThingPython
