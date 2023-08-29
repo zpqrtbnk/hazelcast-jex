@@ -7,3 +7,6 @@
 [submodule "hazelcast-commandline-client"]
 	path = hazelcast-commandline-client
 	url = https://github.com/zpqrtbnk/hazelcast-commandline-client
+[submodule "user-code-runtime"]
+	path = user-code-runtime
+	url = https://github.com/hazelcast/user-code-runtime

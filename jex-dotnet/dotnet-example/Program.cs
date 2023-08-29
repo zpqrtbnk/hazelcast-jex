@@ -16,7 +16,7 @@
 using System;
 using System.Threading.Tasks;
 using Hazelcast.DistributedObjects;
-
+using Microsoft.Extensions.Logging;
 namespace Hazelcast.Demo.Example;
 
 public class Program
@@ -109,7 +109,7 @@ public class Program
                 //compact.SetTypeName<SomeThing>("some-thing");
                 //compact.SetTypeName<OtherThing>("other-thing");
 
-            })
+            }).WithConsoleLogger(LogLevel.Debug)
             .Build();
 
    }

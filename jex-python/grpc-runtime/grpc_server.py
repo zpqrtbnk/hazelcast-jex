@@ -5,6 +5,8 @@ import socket
 import logging
 import importlib
 import traceback
+import threading
+import signal
 from hzdata import MapEntry,HzData
 from concurrent import futures
 
@@ -136,17 +138,25 @@ def serve(port):
     server.start()
     print("serving...")
     logger.info("serving...")
+    
+    # FIXME waiting for stdin is bad in k8 (what's stdin?)
+    done = threading.Event()
+    def on_done(signum, frame):
+        done.set()
+    signal.signal(signal.SIGTERM, on_done)
+    done.wait()
+    
     #FIXME in .NET *and* here there's a diff between terminating the 'invoke' call *and* terminating the gRPC server? in case we reconnect?
     #server.wait_for_termination()
     # Wait for a stop signal in stdin
     # FIXME this is not how we want to do it
     # well send a .EXIT function or .COMPLETE or something
     # so here we need to wait on 'something'
-    stdin_message = input()
-    if stdin_message == 'stop':
-        logger.info('Received a "stop" message from stdin. Stopping the server.')
-    else:
-        logger.info('Received an unexpected message from stdin: "%s"' % stdin_message)
+    #stdin_message = input()
+    #if stdin_message == 'stop':
+    #    logger.info('Received a "stop" message from stdin. Stopping the server.')
+    #else:
+    #    logger.info('Received an unexpected message from stdin: "%s"' % stdin_message)
     server.stop(0).wait()
 
 # fixme?!

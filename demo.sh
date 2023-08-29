@@ -5,7 +5,8 @@ function init () {
     export DEMO=/home/sgay/shared/hazelcast-jex # path to the demo root
     export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
-    export CLUSTERADDR=localhost:5701
+    #export CLUSTERADDR=localhost:5701
+	export CLUSTERADDR=192.168.1.200:5701
     export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
 	export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
     export LOGGING_LEVEL=DEBUG
@@ -16,6 +17,7 @@ function init () {
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
     export CLC="$DEMO/hazelcast-commandline-client/build/clc --config $DEMO/temp/clc-config.yml"
+	export HELM=$DEMO/temp/helm-v3.12.3/helm
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
 	export PYTHON=python3 # linux
 	if [ "$OSTYPE" == "msys " ]; then
@@ -27,15 +29,20 @@ function init () {
     fi
 
     cat <<EOF > $DEMO/temp/clc-config.yml
-    cluster:
-    name: $CLUSTERNAME
-    address: $CLUSTERADDR
+cluster:
+  name: $CLUSTERNAME
+  address: $CLUSTERADDR
 EOF
+
+	$HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
 
     alias demo=./demo.sh
     alias clz=$CLZ
     alias clc=$CLC
+	alias helm=$HELM
 
+	echo "configured with:"
+	echo "    member at $CLUSTERADDR"
     echo "initialized the following aliases:"
     echo "    demo: invokes the demo script"
     echo "    clc:  invokes the clc with the demo config"
@@ -58,10 +65,10 @@ function build_clc () {
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
         LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
-        if [ "$OSTYPE" == "msys "]; then
+        if [ "$OSTYPE" == "msys " ]; then
             go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
         fi
-        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc.exe ./cmd/clc
+        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc ./cmd/clc
     )
 }
 
@@ -173,6 +180,61 @@ function runtime_dotnet_grpc () {
     )
 }
 
+# builds docker python image
+function build_docker_python () {
+
+	# build python image
+	docker build \
+		-t $DOCKER_REPOSITORY/jet-python-grpc:latest \
+		-f jobs/python-grpc-container.dockerfile \
+		jex-python/python-grpc/publish/any	
+		
+	# for k8 to find it?
+	docker push $DOCKER_REPOSITORY/jet-python-grpc:latest
+}
+
+# builds docker dotnet image 
+function build_docker_dotnet () {
+
+	# build dotnet image
+	docker build \
+		-t $DOCKER_REPOSITORY/jet-dotnet-grpc:latest \
+		-f jobs/dotnet-grpc-container.dockerfile \
+		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
+}
+
+# builds docker hazelcast image
+function build_docker_hazelcast () {
+
+	# cannot run that bare one, need to add our own Java code
+	#docker pull hazelcast/hazelcast:$HZVERSION_DOCKER
+	
+	# build hazelcast image
+	# from an existing official version (HZVERSION_DOCKER)
+	# which we overwrite with our temp version (HZVERSION) files
+	
+	BUILD_CONTEXT=$DEMO/temp/docker-build-context
+	if [ -d $BUILD_CONTEXT ]; then
+		rm -rf $BUILD_CONTEXT
+	fi
+	mkdir $BUILD_CONTEXT
+	
+	cp hazelcast/distribution/target/hazelcast-$HZVERSION/lib/*.jar $BUILD_CONTEXT
+	cp hazelcast-cluster-k8.xml $BUILD_CONTEXT/hazelcast.xml
+	ls $BUILD_CONTEXT
+	echo ""
+	
+	docker build \
+		-t $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER \
+		-f jobs/hazelcast.dockerfile \
+		--build-arg="HZVERSION=$HZVERSION_DOCKER" \
+		$BUILD_CONTEXT
+		
+	rm -rf $BUILD_CONTEXT
+	
+	docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:latest
+}
+
 # builds docker images
 function build_docker () {
 
@@ -180,47 +242,96 @@ function build_docker () {
 	if [ $? -eq 1 ]; then
 		docker network create $DOCKER_NETWORK
 	fi
-	
-	# build python image
-	docker build \
-		-t $DOCKER_REPOSITORY/jet-python-grpc:latest \
-		-f jobs/python-grpc-container.dockerfile \
-		jex-python/python-grpc/publish/any	
 
-	# build dotnet image
-	docker build \
-		-t $DOCKER_REPOSITORY/jet-dotnet-grpc:latest \
-		-f jobs/dotnet-grpc-container.dockerfile \
-		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
-		
-	# cannot run that bare one, need to add our own Java code
-	docker pull hazelcast/hazelcast:$HZVERSION_DOCKER
-	
-	# build hazelcast image
-	# from an existing official version (HZVERSION_DOCKER)
-	# which we overwrite with our temp version (HZVERSION) files
-	docker build \
-		-t $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER \
-		-f jobs/hazelcast.dockerfile \
-		--build-arg="HZVERSION=$HZVERSION_DOCKER" \
-		hazelcast/distribution/target/hazelcast-$HZVERSION/lib
+	build_docker_python
+	build_docker_dotnet
+	build_docker_hazelcast
 }
 
 # NOTE
 # add --entrypoint /bin/bash to override entrypoint and inspect the container!
+# forward ports: kc port-forward --namespace default runtime-controller-68cc497fcb-bk56w 50051:50051
+# shell into a k8 pod: kc exec -it hazelcast-0 -- /bin/bash
 
 # runs the docker member
 function run_docker_member () {
 
+	# removed:
+	#   -v $DEMO/hazelcast-cluster.xml:/opt/hazelcast/hazelcast.xml \
+	# configuration is now copied into the image when building
+	# because it's hard to map a file in k8 setup (see hazelcast.dockerfile)
+
 	docker run --rm -it --net jex \
-		-v $DEMO/hazelcast-cluster.xml:/opt/hazelcast/hazelcast.xml \
 		-p 5701:5701 \
 		--name member0 -h member0 \
-		-e HAZELCAST_CONFIG=hazelcast.xml \
+		-e HAZELCAST_CONFIG=/data/hazelcast/hazelcast.xml \
 		-e HZ_CLUSTERNAME=dev \
 		-e HZ_RUNTIME_CONTROLLER_ADDRESS=10.106.74.139 \
 		-e HZ_RUNTIME_CONTROLLER_PORT=50051 \
 		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
+}
+
+function k8_start_controller () {
+	$HELM upgrade --install runtime-controller user-code-runtime/charts/runtime-controller
+}
+
+function k8_stop_controller () {
+	$HELM delete runtime-controller
+}
+
+function k8_start_member () {
+	# beware! 
+	# HZ_RUNTIME_CONTROLLER_ADDRESS/PORT configured in pod-...yaml
+	#kubectl apply -f k8/service-hz-hazelcast.yaml
+	#kubectl apply -f k8/pod-hz-hazelcast.yaml
+	$HELM install hazelcast hzcharts/hazelcast \
+		-f k8/member-values.yaml
+	
+	# no idea how to get these to work => coded into values.yaml	
+	#--set env.enabled=true \
+	#--set env.vars.HAZELCAST_CONFIG=hazelcast.xml \
+	#--set env.vars.HZ_CLUSTERNAME=dev \
+	#--set env.vars.HZ_RUNTIME_CONTROLLER_ADDRESS=runtime-controller \
+	#--set env.vars.HZ_RUNTIME_CONTROLLER_PORT=50051 \
+
+}
+
+function k8_stop_member () {
+	#kubectl delete service/hz-hazelcast-0 pod/hz-hazelcast-0
+	#kubectl delete -f k8/pod-hz-hazelcast.yaml
+	#kubectl delete -f k8/service-hz-hazelcast.yaml
+	$HELM delete hazelcast
+}
+
+function k8_logs_member () {
+	kubectl logs service/hz-hazelcast-0
+}
+
+function k8_get () {
+	kubectl get pod --output=wide
+	kubectl get svc
+}
+
+# runs the k8 member
+# (the plain docker member cannot talk to the runtime controller)
+function run_k8_member () {
+
+	# FIXME but what about the freaking configuration file?!
+	# can it be done with --overrides without it being too crazy?
+	# -> we copy it into the image :(
+	#
+	# and then, that member goes crazy trying to talk to controller
+	# = DO NOT USE
+
+	kubectl run --rm member0 \
+		-i --tty \
+		--restart=Never \
+		--expose --port=5701 \
+		--env="HAZELCAST_CONFIG=hazelcast.xml" \
+		--env="HZ_CLUSTERNAME=dev" \
+		--env="HZ_RUNTIME_CONTROLLER_ADDRESS=runtime-controller" \
+		--env="HZ_RUNTIME_CONTROLLER_PORT=50051" \
+		--image=$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 }
 
 # runs the docker python runtime (for passthru)
@@ -303,7 +414,8 @@ function example () {
     (
         cd jex-dotnet/dotnet-example
         dotnet run -- \
-            --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR)
+            --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR
+	)
 }
 
 # run a gRPC test client

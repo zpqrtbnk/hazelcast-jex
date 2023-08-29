@@ -14,7 +14,7 @@ job:
           runtime: 
             service:
               container:
-                image: zpqrtbnk/jet-dotnet-grpc:latest
+                image: zpqrtbnk/jet-python-grpc:latest
             transport: 
               grpc:
                 port: 5252

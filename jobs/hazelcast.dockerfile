@@ -10,13 +10,17 @@ ARG HZVERSION=0.0.0
 #
 FROM hazelcast/hazelcast:$HZVERSION
 
+# sudo
+USER root
+
 # copy from distribution to /opt/hazelcast/lib
 COPY *.jar /opt/hazelcast/lib/
 
-# remove files from base image (must be user root)
-USER root
+# copy configuration file
+COPY hazelcast.xml /data/hazelcast/
 
 # args need to be requested at every stage, lol
+# remove original jar files to avoid conflicts
 ARG HZVERSION
 RUN rm /opt/hazelcast/lib/hazelcast*-$HZVERSION.jar
 
