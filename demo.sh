@@ -1,23 +1,33 @@
 
 function init () {
 
+    # NOTE
+    # avoid editing demo.sh (and commiting changes to source revision)
+    # instead, create a demo.sh.user file alongside demo.sh with only
+    # the required changes
+
     # --- configure environment ---
-    export DEMO=/home/sgay/shared/hazelcast-jex # path to the demo root
+    export DEMO=/path/to/hazelcast-jex # path to the demo root
     export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
-    #export CLUSTERADDR=localhost:5701
-	export CLUSTERADDR=192.168.1.200:5701
+    export CLUSTERADDR=localhost:5701
     export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
 	export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
     export LOGGING_LEVEL=DEBUG
 	export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
 	export DOCKER_NETWORK=jex # the network name for our demo
+    export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
+	export HELM=helm # name of Helm executable, can be 'mvn' or a full path
     # --- configure environment ---
+
+    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+    if [ -f "$SCRIPT_DIR/demo.sh.user" ]; then
+        source "$SCRIPT_DIR/demo.sh.user"
+    fi
 
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
     export CLC="$DEMO/hazelcast-commandline-client/build/clc --config $DEMO/temp/clc-config.yml"
-	export HELM=$DEMO/temp/helm-v3.12.3/helm
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
 	export PYTHON=python3 # linux
 	if [ "$OSTYPE" == "msys " ]; then
@@ -48,6 +58,7 @@ EOF
 	complete -F _demo demo
 
 	echo "configured with:"
+    echo "    cluster name $CLUSTERNAME"
 	echo "    member at $CLUSTERADDR"
     echo "initialized the following aliases:"
     echo "    demo: invokes the demo script"
