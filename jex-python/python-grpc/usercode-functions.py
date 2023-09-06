@@ -1,6 +1,6 @@
 
 from hazelcast.config import Config
-from hzdata import MapEntry
+from hazelcast_data import MapEntry
 from domain import *
 
 def get_functions():
@@ -11,7 +11,6 @@ def get_functions():
 def configure_client(config:Config):
     config.compact_serializers.append(SomeThingSerializer())
     config.compact_serializers.append(OtherThingSerializer())
-    return config
 
 # todo: sync vs async methods?
 # todo: how does compact work with python?

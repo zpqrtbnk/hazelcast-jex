@@ -12,8 +12,6 @@ class OtherThing:
     def __init__(self, value: str):
         self.value = value
     def __str__(self):
-        #return "OtherThing (value='%s}')" % self.value # old old
-        #return "OtherThing (value='{}}')".format(self.value) #old
         return f"OtherThing (value='{self.value}')"
 
 class SomeThingSerializer(CompactSerializer[SomeThing]):
