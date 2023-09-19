@@ -44,10 +44,8 @@ public class Program
         builder.Services.AddSingleton<IUserCodeServer>(serviceProvider =>
         {
             // create the server, and serve the functions
-            var userCodeServer = new UserCodeServer();
+            var userCodeServer = UserCodeServer.Create<IMapEntry, IMapEntry>(DoThing);
             userCodeServer.ConfigureOptions += optionsBuilder => ConfigureOptions(optionsBuilder, serviceProvider);
-            userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
-            userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingPython", DoThing); // temp
             return userCodeServer;
         });
 

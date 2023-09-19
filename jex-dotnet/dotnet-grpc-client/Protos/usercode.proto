@@ -1,9 +1,6 @@
 syntax = "proto3";
 
 option csharp_namespace = "Hazelcast.UserCode.Transports.Grpc";
-//option java_multiple_files = true;
-//option java_package = "com.hazelcast.usercode.grpc";
-//option java_outer_classname = "TransportTopLevel";
 
 package usercode;
 
@@ -11,8 +8,16 @@ service Transport {
   rpc invoke (stream UserCodeGrpcMessage) returns (stream UserCodeGrpcMessage) {}
 }
 
+enum MessageType {
+  CONNECT=0;
+  USER_CODE=1;
+  END=2;
+  ERROR=3;
+  TIMEOUT=4;
+}
+
 message UserCodeGrpcMessage {
   int64 id = 1;
-  string functionName = 2;
+  MessageType type = 2;
   bytes payload = 3;
 }

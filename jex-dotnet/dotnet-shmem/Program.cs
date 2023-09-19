@@ -75,10 +75,9 @@ public class Program
         services.AddTransient<IUserCodeServer>(serviceProvider =>
         {
             // create the server, and serve the functions
-            var userCodeServer = new UserCodeServer();
+            // FIXME just new UserCodeServer<>(DoThing).WithConfigureOptions(...) would be enough
+            var userCodeServer = UserCodeServer.Create<IMapEntry, IMapEntry>(DoThing);
             userCodeServer.ConfigureOptions += optionsBuilder => ConfigureOptions(optionsBuilder, serviceProvider);
-            userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingDotnet", DoThing);
-            userCodeServer.AddFunction<IMapEntry, IMapEntry>("doThingPython", DoThing); // temp
             return userCodeServer;
         });
 

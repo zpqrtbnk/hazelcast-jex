@@ -18,6 +18,7 @@
 		</PackageReference>
 		<PackageReference Include="Hazelcast.Net" Version="5.3.0-preview.0" />
 		<PackageReference Include="Hazelcast.Net.UserCode" Version="5.3.0-preview.0" />
+		<PackageReference Include="Hazelcast.Net.Jet" Version="5.3.0-preview.0" />
 	</ItemGroup>
 
 	<!--

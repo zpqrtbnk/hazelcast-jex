@@ -50,6 +50,14 @@ EOF
     alias clz=$CLZ
     alias clc=$CLC
 	alias helm=$HELM
+    alias mvn=$MVN
+
+    # Bash on Windows may produce paths such as /c/path/to/lib and Java wants c:\path\to\lib
+    # and, in this case, the cygpath command *should* be available - and then we will use it
+    export CYGPATH=""
+    if [ "$(command -v cygpath)" != "" ]; then
+        export CYGPATH=cygpath
+    fi
 	
 	export DEMO_COMMANDS=$(grep -E '^function\s[A-Za-z0-9_]*\s' demo.sh \
 	                       | cut -d " " -f 2\
@@ -74,6 +82,7 @@ function _demo() {
     # COMP_CWORD is the index of the word contianing the current cursor position
     # COMPREPLY is an array variable from which bash reads the possible completions
     cur=${COMP_WORDS[COMP_CWORD]}
+    cur=${cur//-/_} # can use - or _
     COMPREPLY=()
     # compgen returns the array of elements from $DEMO_COMMANDS matching the current word
     COMPREPLY=( $( compgen -W "$DEMO_COMMANDS" -- $cur ) )
@@ -110,6 +119,16 @@ function build_cluster () {
         cd distribution/target &&
         rm -rf hazelcast-$HZVERSION && 
         unzip hazelcast-$HZVERSION.zip)
+}
+
+function build_enterprise () {
+    #$MVN -Pquick clean install
+    (
+        cd hazelcast-enterprise
+        $MVN -Pquick clean package install
+        # for some reason hazelcast-enterprise-* is not 'distributed'?! so copy...
+        cp hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION.jar ../hazelcast/distribution/target/hazelcast-$HZVERSION/lib
+    )
 }
 
 # build the Hazelcast .NET client project
@@ -452,6 +471,28 @@ function test_grpc () {
     (
         cd jex-dotnet/dotnet-grpc-client
         dotnet run 
+    )
+}
+
+# submit a pipeline via java
+function submit_java () {
+    (
+        HZHOME=$DEMO/hazelcast/distribution/target/hazelcast-5.4.0-SNAPSHOT
+        TARGET=$DEMO/jex-java/java-pipeline/target
+        CLASSPATH="$TARGET/python-jet-usercode-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
+
+        # trim CLASSPATH
+        CLASSPATH="${CLASSPATH##:}"
+        CLASSPATH="${CLASSPATH%%:}"
+
+        # ensure CLASSPATH is windows style on Windows
+        if [ -n "${CYGPATH}" ]; then
+            CLASSPATH=$(cygpath -w -p "$CLASSPATH")
+        fi
+
+        # execute
+        # -verbose:class
+        java -classpath $CLASSPATH org.example.PythonJetUserCode
     )
 }
 
