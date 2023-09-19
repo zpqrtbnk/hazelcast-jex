@@ -10,3 +10,6 @@
 [submodule "user-code-runtime"]
 	path = user-code-runtime
 	url = https://github.com/hazelcast/user-code-runtime
+[submodule "hazelcast-enterprise"]
+	path = hazelcast-enterprise
+	url = https://github.com/zpqrtbnk/hazelcast-enterprise
