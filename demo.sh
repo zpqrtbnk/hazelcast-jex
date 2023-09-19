@@ -10,9 +10,10 @@ function init () {
     export DEMO=/path/to/hazelcast-jex # path to the demo root
     export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
     export CLUSTERNAME=dev
-    export CLUSTERADDR=localhost:5701
+    #export CLUSTERADDR=localhost:5701
+    export CLUSTERADDR=192.168.1.200:5701
     export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
-	export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
+    export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
     export LOGGING_LEVEL=DEBUG
 	export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
 	export DOCKER_NETWORK=jex # the network name for our demo
@@ -29,10 +30,10 @@ function init () {
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
     export CLC="$DEMO/hazelcast-commandline-client/build/clc --config $DEMO/temp/clc-config.yml"
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
-	export PYTHON=python3 # linux
-	if [ "$OSTYPE" == "msys " ]; then
-		export PYTHON=python # windows
-	fi
+    export PYTHON=python3 # linux
+    if [ "$OSTYPE" == "msys " ]; then
+        export PYTHON=python # windows
+    fi
 
     if [ ! -d $DEMO/temp ]; then
         mkdir $DEMO/temp
@@ -44,7 +45,7 @@ cluster:
   address: $CLUSTERADDR
 EOF
 
-	$HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
+    $HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
 
     alias demo=./demo.sh
     alias clz=$CLZ
@@ -59,11 +60,11 @@ EOF
         export CYGPATH=cygpath
     fi
 	
-	export DEMO_COMMANDS=$(grep -E '^function\s[A-Za-z0-9_]*\s' demo.sh \
-	                       | cut -d " " -f 2\
-						   | grep -E -v 'abspath|init' \
-						   )
-	complete -F _demo demo
+    export DEMO_COMMANDS=$(grep -E '^function\s[A-Za-z0-9_]*\s' demo.sh \
+                             | cut -d " " -f 2\
+                             | grep -E -v 'abspath|init' \
+                          )
+    complete -F _demo demo
 
 	echo "configured with:"
     echo "    cluster name $CLUSTERNAME"
@@ -77,7 +78,7 @@ EOF
 }
 
 function _demo() {
-	local cur
+    local cur
     # COMP_WORDS is an array containing all individual words in the current command line
     # COMP_CWORD is the index of the word contianing the current cursor position
     # COMPREPLY is an array variable from which bash reads the possible completions
@@ -110,15 +111,32 @@ function build_clc () {
     )
 }
 
+function build_java_os () {
+    (
+        cd hazelcast
+        $MVN clean install -DskipTests -Dcheckstyle.skip=true
+        cd distribution/target
+        rm -rf hazelcast-$HZVERSION
+        unzip hazelcast-$HZVERSION.zip
+    )
+}
+
+function build_java_ee () {
+    (
+        cd hazelcast-enterprise
+        $MVN -Pquick clean install
+        cp hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION.jar \
+           ../hazelcast/distribution/target/hazelcast-$HZVERSION/lib 
+    )
+}
+
 # build the Hazelcast cluster (Java) project
 function build_cluster () {
-    # build the Hazelcast project
-    # includes the packages
-    (cd hazelcast &&
-        $MVN package -DskipTests -Dcheckstyle.skip=true &&
-        cd distribution/target &&
-        rm -rf hazelcast-$HZVERSION && 
-        unzip hazelcast-$HZVERSION.zip)
+    # build projects
+    build_java_os
+    build_java_ee
+    # build the docker image
+    build_docker_cluster
 }
 
 function build_enterprise () {
@@ -251,8 +269,8 @@ function build_docker_dotnet () {
 		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
 }
 
-# builds docker hazelcast image
-function build_docker_hazelcast () {
+# builds docker hazelcast cluster image
+function build_docker_cluster () {
 
 	# cannot run that bare one, need to add our own Java code
 	#docker pull hazelcast/hazelcast:$HZVERSION_DOCKER
@@ -281,6 +299,11 @@ function build_docker_hazelcast () {
 	rm -rf $BUILD_CONTEXT
 	
 	docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:latest
+        docker push $DOCKER_REPOSITORY/hazelcast:latest
+
+        DEVTAG=dev.2
+	docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:$DEVTAG
+        docker push $DOCKER_REPOSITORY/hazelcast:$DEVTAG
 }
 
 # builds docker images
@@ -319,15 +342,15 @@ function run_docker_member () {
 		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 }
 
-function k8_start_controller () {
+function k8_controller_start () {
 	$HELM upgrade --install runtime-controller user-code-runtime/charts/runtime-controller
 }
 
-function k8_stop_controller () {
+function k8_controller_stop () {
 	$HELM delete runtime-controller
 }
 
-function k8_start_member () {
+function k8_cluster_start () {
 	# beware! 
 	# HZ_RUNTIME_CONTROLLER_ADDRESS/PORT configured in pod-...yaml
 	#kubectl apply -f k8/service-hz-hazelcast.yaml
@@ -344,15 +367,15 @@ function k8_start_member () {
 
 }
 
-function k8_stop_member () {
+function k8_cluster_stop () {
 	#kubectl delete service/hz-hazelcast-0 pod/hz-hazelcast-0
 	#kubectl delete -f k8/pod-hz-hazelcast.yaml
 	#kubectl delete -f k8/service-hz-hazelcast.yaml
 	$HELM delete hazelcast
 }
 
-function k8_logs_member () {
-	kubectl logs service/hz-hazelcast-0
+function k8_cluster_logs () {
+	kubectl logs hazelcast-0
 }
 
 function k8_get () {
@@ -419,7 +442,7 @@ function run_docker_sh () {
 # clc job submit jobs/dotnet-shmem.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-shmem/publish/self-contained
 # clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-grpc/publish/self-contained
 # clc job submit jobs/python-grpc.yml PYTHON_DIR=$DEMO/jex-python/python-grpc/publish
-function submit () {
+function jet_submit () {
 
     # examples
     # demo submit shmem jobs/dotnet-shmem.yml
@@ -474,8 +497,15 @@ function test_grpc () {
     )
 }
 
+function build_jet_submit_java () {
+    (
+        cd jex-java/java-pipeline
+        $MVN package
+    )
+}
+
 # submit a pipeline via java
-function submit_java () {
+function jet_submit_java () {
     (
         HZHOME=$DEMO/hazelcast/distribution/target/hazelcast-5.4.0-SNAPSHOT
         TARGET=$DEMO/jex-java/java-pipeline/target

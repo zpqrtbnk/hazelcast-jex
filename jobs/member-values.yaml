@@ -1,6 +1,8 @@
 image:
   repository: zpqrtbnk/hazelcast
   tag: latest
+  #tag: dev.0
+  # https://kubernetes.io/docs/concepts/containers/images/
   # force-pull while we keep updating 'latest'
   pullPolicy: Always
 mancenter:
@@ -23,6 +25,11 @@ env:
 hazelcast:
   yaml:
     hazelcast:
+      properties:
+        # this is the new thing - we configure via properties not ENV
+        hazelcast.usercode.controller.port: 50051
+        hazelcast.usercode.controller.address: runtime-controller
+        hazelcast.usercode.runtime.port: 5252
       network:
         join:
           kubernetes:

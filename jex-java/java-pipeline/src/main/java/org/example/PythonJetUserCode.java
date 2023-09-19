@@ -1,11 +1,15 @@
 package org.example;
 
 import com.hazelcast.core.Hazelcast;
+import com.hazelcast.client.HazelcastClient;
+import com.hazelcast.client.config.ClientConfig;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.journal.DeserializingEntry;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.*;
 import com.hazelcast.usercode.jet.*;
+import com.hazelcast.usercode.UserCodeContainerConfig;
 
 import com.hazelcast.function.FunctionEx;
 import com.hazelcast.jet.pipeline.StreamStage;
@@ -17,25 +21,18 @@ public class PythonJetUserCode {
 
     public static void main(String[] args) {
 
+        final boolean useResources = true; // flag to decide what mode to test
+
         final int parallelProcessors = 4; // 4 processors per member
         final int parallelOperations = 4; // 4 operations per processor
         final boolean preserveOrder = true;
 
-        final boolean baseAndResource = true; // can run different modes :)
-
-        // the method name is in case we want the dotnet process to support several
-        // methods - there is always one process per job per member, anyway, but
-        // we may want to re-use one unique executable for different jobs
+        final String imageName = useResources ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
 
         UserCodeContainerConfig config = new UserCodeContainerConfig();
-        if (baseAndResource) {
-            config.setImage("zpqrtbnk/python-usercode-base");
-        }
-        else {
-            config.setImage("zpqrtbnk/python-usercode");
-        }
+        config.setImage(imageName);
         config.setPreserveOrder(preserveOrder);
-        //config.setMaxConcurrentOps(parallelOperations); // Emre says "we don't provide concurrency at the moment" 
+        //config.setMaxConcurrentOps(parallelOperations); // Emre says "we don't provide concurrency at the moment"
         config.setName("PythonJetUserCode");
 
         // create and define the pipeline
@@ -56,11 +53,19 @@ public class PythonJetUserCode {
 
         // submit
         JobConfig jobConfig = new JobConfig();
-        if (baseAndResource) {
-            String dirPath = "~/Code/hazelcast-usercode/python/example/usercode"
+        jobConfig.addClass(PythonJetUserCode.class);
+        if (useResources) {
+            String dirPath = "/home/sgay/shared/hazelcast-usercode/python/example/custom/usercode";
             String dirId = "usercode";
             jobConfig.attachDirectory(dirPath, dirId);
         }
-        Hazelcast.bootstrappedInstance().getJet().newJob(pipeline, jobConfig);
+
+        ClientConfig clientConfig = new ClientConfig();
+        clientConfig.setClusterName("dev");
+        clientConfig.getNetworkConfig().addAddress("192.168.1.200:5701");
+        //clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
+        HazelcastInstance hz = HazelcastClient.newHazelcastClient(clientConfig);
+
+        hz.getJet().newJob(pipeline, jobConfig);
     }
 }

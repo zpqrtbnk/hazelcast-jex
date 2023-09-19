@@ -1,0 +1,92 @@
+job:
+  name: fraud-detection-ml
+  pipeline:
+    - pipeline:
+  
+        # source from transactions map
+        - source: map-journal
+          name: "Start Fraud Detection ML Pipeline"      
+          map-name: "transactions"
+          journal-initial-position: START_FROM_CURRENT
+          timestamp: INGESTION
+          parallel-processors: 8 # local parallelism
+      
+          # => (key, transaction-json-string)
+         
+        - transform: map
+          name: "INGEST transaction in JSON format"
+          map: |
+            x -> f.Tuple(x.key, f.JsonObject(x.value.toString()))
+            x, f -> f.Tuple(x.key, f.JsonObject(x.value.toString()))
+      
+          # => (key, transaction-json-object)
+         
+        # Look up Merchant for this transaction
+        - transform: map-using-replicated-map
+          name: "ENRICH - Retrieve Merchant Features"
+          map-name: merchants
+          key: |
+            x -> f.Coalesce(x.f1.merchant, "none")
+          map: |
+            x, merchant -> f.Tuple(x.f0, x.f1, f.JsonObject(merchant.toString()))
+            x, merchant, f -> f.Tuple(x.f0, x.f1, f.JsonObject(merchant.toString()))
+      
+          # => (key, transaction-json-object, merchant-json-object)
+      
+        # Look up Customer features for this transaction
+        - transform: map-using-map
+          name: "ENRICH - Retrieve Customer Features"
+          map-name: customers
+          key: |
+            x -> f.Coalesce(x.f1.cc_num, "none")
+          map: |
+            x, customer -> f.Tuple(x.f0, x.f1, x.f2, f.JsonObject(customer.toString()))
+
+          # => (key, transaction-json-object, merchant-json-object, customer-json-object)
+
+        # next part could be done in Python BUT what-if we wanted to have more complex stuff performed in Java?
+
+        # Calculate Real-Time Features
+        - transform: map
+          name: "ENRICH - Real-Time Features"
+          map: |
+            x -> 
+              tlat = x.f1.getDouble("lat", 0)
+              tlon = x.f1.getDouble("long", 0)
+              clat = x.f3.getFloat("latitude", 0)
+              clon = x.f3.getFloat("longitude", 0)
+              dist = f.DistanceKms(tlat, tlon, clat, clon)
+              f.Tuple(x.f0, x.f1, x.f2, x.f3, dist)
+
+          # => (key, transaction-json-object, merchant-json-object, customer-json-object, distance-km)
+    
+        # Prepare fraud request (JSON String) to be sent to Python
+        - meh:
+          # this just converts a tuple5 into a new JsonObject
+          # will the JsonObject flow to Python?
+          # could we simply not pass the original tuple?
+          # Python will return a JsonObject NOT - the correct map entry
+    
+        # Run Python Fraud Detection Model
+        - transform: user-code
+          name: "PREDICT (Python)- Fraud Probability"
+
+          # user code runtime parameters
+          runtime: 
+            service:
+              container:
+                image: zpqrtbnk/python-fraud-detection:latest
+            transport: grpc
+
+          # name of the Python user code function to invoke
+          function: fraud_detect
+
+          # transform parameters
+          parallel-processors: 8 # local parallelism
+          parallel-operations: 1
+          
+          # => (key, prediction-json-object)
+          
+        # Sink to prediction result map
+        - sink: map
+          map-name: "predictionResult"
