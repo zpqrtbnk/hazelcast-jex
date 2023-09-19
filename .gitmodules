@@ -13,3 +13,6 @@
 [submodule "hazelcast-enterprise"]
 	path = hazelcast-enterprise
 	url = https://github.com/zpqrtbnk/hazelcast-enterprise
+[submodule "hazelcast-usercode"]
+	path = hazelcast-usercode
+	url = https://github.com/zpqrtbnk/hazelcast-usercode

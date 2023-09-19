@@ -1,3 +1,14 @@
+#
+# HAZELCAST JEX DEMO SCRIPT
+#
+
+# run '. ./demo.sh init' in order to initialize the demo environment
+
+# NOTE
+# add '--entrypoint /bin/bash' to override entrypoint and inspect the content of a container
+# forward ports: kc port-forward --namespace default runtime-controller-68cc497fcb-bk56w 50051:50051
+# shell into a k8 pod: kc exec -it hazelcast-0 -- /bin/bash
+
 
 function init () {
 
@@ -52,6 +63,9 @@ EOF
     alias clc=$CLC
 	alias helm=$HELM
     alias mvn=$MVN
+    alias kc=kubectl
+    alias dk=docker
+    alias kca='kubectl get all'
 
     # Bash on Windows may produce paths such as /c/path/to/lib and Java wants c:\path\to\lib
     # and, in this case, the cygpath command *should* be available - and then we will use it
@@ -67,12 +81,14 @@ EOF
     complete -F _demo demo
 
 	echo "configured with:"
-    echo "    cluster name $CLUSTERNAME"
-	echo "    member at $CLUSTERADDR"
+    echo "    cluster name '$CLUSTERNAME'"
+	echo "    member at '$CLUSTERADDR'"
     echo "initialized the following aliases:"
     echo "    demo: invokes the demo script"
     echo "    clc:  invokes the clc with the demo config"
     echo "    clz:  invokes the cluster hz script"
+    echo "    mvn:  invokes Maven"
+    echo "    helm: invokes Helm"
     echo "enjoy!"
     echo ""
 }
@@ -94,7 +110,7 @@ function abspath () {
     (cd $(dirname $1); echo "$(pwd)/$(basename $1)")
 }
 
-# build the Hazelcast CLC (Go) project
+# build the Hazelcast CLC (Go) project (in its submodule)
 function build_clc () {
     (cd hazelcast-commandline-client &&
         CLC_VERSION=UNKNOWN
@@ -111,7 +127,8 @@ function build_clc () {
     )
 }
 
-function build_java_os () {
+# build the Hazelcast OS (Java) project (in its submodule)
+function build_cluster_os () {
     (
         cd hazelcast
         $MVN clean install -DskipTests -Dcheckstyle.skip=true
@@ -121,7 +138,8 @@ function build_java_os () {
     )
 }
 
-function build_java_ee () {
+# build the Hazelcast EE (Java) project (in its submodule)
+function build_cluster_ee () {
     (
         cd hazelcast-enterprise
         $MVN -Pquick clean install
@@ -130,26 +148,7 @@ function build_java_ee () {
     )
 }
 
-# build the Hazelcast cluster (Java) project
-function build_cluster () {
-    # build projects
-    build_java_os
-    build_java_ee
-    # build the docker image
-    build_docker_cluster
-}
-
-function build_enterprise () {
-    #$MVN -Pquick clean install
-    (
-        cd hazelcast-enterprise
-        $MVN -Pquick clean package install
-        # for some reason hazelcast-enterprise-* is not 'distributed'?! so copy...
-        cp hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION.jar ../hazelcast/distribution/target/hazelcast-$HZVERSION/lib
-    )
-}
-
-# build the Hazelcast .NET client project
+# build the Hazelcast .NET (C#) client project (in its submodule)
 function build_client_dotnet () {
     # build the Hazelcast .NET client
     # includes the new Hazelcast.Net.Jet NuGet package
@@ -202,79 +201,9 @@ function build_demo_dotnet () {
     )
 }
 
-# build the various Python resources used for the demo
-function build_demo_python () {
+# builds the Hazelcast cluster (OS+EE) Docker image
+function dk_cluster_build () {
 
-    (
-        cd jex-python
-
-        PUBLISH=$PWD/python-grpc/publish/
-        rm -rf $PUBLISH
-        mkdir $PUBLISH
-        PUBLISH=$PUBLISH/any
-        mkdir $PUBLISH
-        (
-            cd grpc-runtime
-            #find . -type f -name '*.py' -exec cp --parents {} $PUBLISH \;
-            find . -type f -name '*.py' ! -name '__*' -exec cp {} $PUBLISH \;
-        )
-        (
-            cd python-grpc
-            cp requirements.txt $PUBLISH
-            cp *.py $PUBLISH
-        )
-    )
-}
-
-# executes the python runtime as a process
-# can be useful to test with the passthru runtime service
-function runtime_python () {
-
-    (
-        VENV_PATH=$PWD/temp
-        cd jex-python/python-grpc/publish/any
-        $PYTHON usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
-    )
-}
-
-# executes the .NET+gRPC runtime as a process
-# can be useful to test with the passthru runtime service
-function runtime_dotnet_grpc () {
-    (
-        cd jex-dotnet/dotnet-grpc
-        dotnet run
-    )
-}
-
-# builds docker python image
-function build_docker_python () {
-
-	# build python image
-	docker build \
-		-t $DOCKER_REPOSITORY/jet-python-grpc:latest \
-		-f jobs/python-container-grpc.dockerfile \
-		jex-python/python-grpc/publish/any	
-		
-	# for k8 to find it?
-	docker push $DOCKER_REPOSITORY/jet-python-grpc:latest
-}
-
-# builds docker dotnet image 
-function build_docker_dotnet () {
-
-	# build dotnet image
-	docker build \
-		-t $DOCKER_REPOSITORY/jet-dotnet-grpc:latest \
-		-f jobs/dotnet-container-grpc.dockerfile \
-		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
-}
-
-# builds docker hazelcast cluster image
-function build_docker_cluster () {
-
-	# cannot run that bare one, need to add our own Java code
-	#docker pull hazelcast/hazelcast:$HZVERSION_DOCKER
-	
 	# build hazelcast image
 	# from an existing official version (HZVERSION_DOCKER)
 	# which we overwrite with our temp version (HZVERSION) files
@@ -306,31 +235,79 @@ function build_docker_cluster () {
         docker push $DOCKER_REPOSITORY/hazelcast:$DEVTAG
 }
 
-# builds docker images
-function build_docker () {
+# executes the python runtime as a process
+# can be useful to test with the passthru runtime service
+function runtime_python () {
+
+    (
+        VENV_PATH=$PWD/temp
+        cd jex-python/python-grpc/publish/any
+        $PYTHON usercode-runtime.py --grpc-port 5252 --venv-path=$VENV_PATH --venv-name=python-venv
+    )
+}
+
+# executes the .NET+gRPC runtime as a process
+# can be useful to test with the passthru runtime service
+function runtime_dotnet_grpc () {
+    (
+        cd jex-dotnet/dotnet-grpc
+        dotnet run
+    )
+}
+
+# build the Python runtime Docker images
+function dk_runtime_python_build () {
+
+    # build a base image
+    docker build \
+        -t $DOCKER_REPOSITORY/python-usercode-base:latest \
+        -f hazelcast-usercode/python/docker/dockerfile.base \
+        hazelcast-usercode/python
+
+	docker push $DOCKER_REPOSITORY/python-usercode-base:latest
+
+    # build an example image (with actual usercode included)
+    docker build \
+        -t $DOCKER_REPOSITORY/python-usercode:latest \
+        -f hazelcast-usercode/python/docker/dockerfile.example \
+        hazelcast-usercode/python/example
+
+	docker push $DOCKER_REPOSITORY/python-usercode:latest
+}
+
+# build the Dotnet runtime Docker images
+function dk_runtime_dotnet_build () {
+
+    # meh: build usercode vs usercode-base?
+
+	docker build \
+		-t $DOCKER_REPOSITORY/dotnet-usercode:latest \
+		-f jobs/dotnet-container-grpc.dockerfile \
+		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
+
+    docker push $DOCKER_REPOSITORY/dotnet-usercode:latest 
+}
+
+# initialize Docker (custom network...)
+function dk_initialize () {
 
 	docker network ls | grep -q $DOCKER_NETWORK
 	if [ $? -eq 1 ]; then
 		docker network create $DOCKER_NETWORK
 	fi
-
-	build_docker_python
-	build_docker_dotnet
-	build_docker_hazelcast
 }
 
-# NOTE
-# add --entrypoint /bin/bash to override entrypoint and inspect the container!
-# forward ports: kc port-forward --namespace default runtime-controller-68cc497fcb-bk56w 50051:50051
-# shell into a k8 pod: kc exec -it hazelcast-0 -- /bin/bash
-
-# runs the docker member
-function run_docker_member () {
+# run the docker member
+function dk_cluster_run () {
 
 	# removed:
 	#   -v $DEMO/hazelcast-cluster.xml:/opt/hazelcast/hazelcast.xml \
 	# configuration is now copied into the image when building
 	# because it's hard to map a file in k8 setup (see hazelcast.dockerfile)
+    #
+    # BUT
+    # this is not true, we use helm and charts and stuff, so this below
+    # probably does not work, meh
 
 	docker run --rm -it --net jex \
 		-p 5701:5701 \
@@ -342,14 +319,17 @@ function run_docker_member () {
 		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 }
 
+# start the k8 runtime controller
 function k8_controller_start () {
 	$HELM upgrade --install runtime-controller user-code-runtime/charts/runtime-controller
 }
 
+# stop the k8 runtime controller
 function k8_controller_stop () {
 	$HELM delete runtime-controller
 }
 
+# start the k8 cluster
 function k8_cluster_start () {
 	# beware! 
 	# HZ_RUNTIME_CONTROLLER_ADDRESS/PORT configured in pod-...yaml
@@ -367,6 +347,7 @@ function k8_cluster_start () {
 
 }
 
+# stop the k8 cluster
 function k8_cluster_stop () {
 	#kubectl delete service/hz-hazelcast-0 pod/hz-hazelcast-0
 	#kubectl delete -f k8/pod-hz-hazelcast.yaml
@@ -374,6 +355,7 @@ function k8_cluster_stop () {
 	$HELM delete hazelcast
 }
 
+# get the k8 cluster logs
 function k8_cluster_logs () {
 	kubectl logs hazelcast-0
 }
@@ -383,66 +365,50 @@ function k8_get () {
 	kubectl get svc
 }
 
-# runs the k8 member
-# (the plain docker member cannot talk to the runtime controller)
-function run_k8_member () {
-
-	# FIXME but what about the freaking configuration file?!
-	# can it be done with --overrides without it being too crazy?
-	# -> we copy it into the image :(
-	#
-	# and then, that member goes crazy trying to talk to controller
-	# = DO NOT USE
-
-	kubectl run --rm member0 \
-		-i --tty \
-		--restart=Never \
-		--expose --port=5701 \
-		--env="HAZELCAST_CONFIG=hazelcast.xml" \
-		--env="HZ_CLUSTERNAME=dev" \
-		--env="HZ_RUNTIME_CONTROLLER_ADDRESS=runtime-controller" \
-		--env="HZ_RUNTIME_CONTROLLER_PORT=50051" \
-		--image=$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
-}
-
-# runs the docker python runtime (for passthru)
-function run_docker_runtime_python () {
+# run the Python runtime via Docker (for passthru)
+function dk_runtime_python_run () {
 
 	# BEWARE!
-	# the job yaml need to be updated to specify the grpc.address=runtime
-	# so that Java knows where to reach the Python gRPC runtime server
+    # the job need to know the address of the gRPC runtime server
+
+    #IMAGE=$DOCKER_REPOSITORY/python-usercode
+    IMAGE=$DOCKER_REPOSITORY/python-usercode-base
 
 	docker run --rm -it --net jex \
 		-p 5252:5252 \
 		--name runtime -h runtime \
-		$DOCKER_REPOSITORY/jet-python-grpc
+        $IMAGE
 }
 
-function run_docker_runtime_dotnet () {
+# run the Dotnet runtime via Docker (for passthru)
+function dk_runtime_dotnet_run () {
 
-	# BEWARE! 
-	# (see python)
+	# BEWARE!
+    # the job need to know the address of the gRPC runtime server
+
+    IMAGE=$DOCKER_REPOSITORY/dotnet-usercode-base
 
 	docker run --rm -it --net jex \
 		-p 5252:5252 \
 		--name runtime -h runtime \
-		$DOCKER_REPOSITORY/jet-dotnet-grpc
+        $IMAGE
 }
 
-# runs a temp sh
-function run_docker_sh () {
+# run a temp sh Docker container
+function dk_sh () {
 
 	docker run -it --rm --net jex \
 		--name tempsh -h tempsh \
 		busybox sh
 }
 
-# submit jobs, the .NET way - OBSOLETE - should use the CLC now
-# e.g.:
+# submit jobs, the .NET way
+# OBSOLETE - should use the CLC now, e.g.:
 # clc job submit jobs/dotnet-shmem.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-shmem/publish/self-contained
 # clc job submit jobs/dotnet-grpc.yml DOTNET_DIR=$DEMO/jex-dotnet/dotnet-grpc/publish/self-contained
 # clc job submit jobs/python-grpc.yml PYTHON_DIR=$DEMO/jex-python/python-grpc/publish
-function jet_submit () {
+# OBSOLETE - and, even that usage of CLC is using our own CODEC etc
+function jet_submit_dotnet_OBSOLETE () {
 
     # examples
     # demo submit shmem jobs/dotnet-shmem.yml
@@ -477,9 +443,8 @@ function jet_submit () {
 }
 
 # run the demo example
-# will put stuff into a map and expect stuff to appear in another map
-# magic
-function example () {
+# (puts stuff into a map and expects stuff to appear in another map)
+function run_example () {
 
     # run the example
     (
@@ -489,7 +454,7 @@ function example () {
 	)
 }
 
-# run a gRPC test client
+# test a gRPC runtime
 function test_grpc () {
     (
         cd jex-dotnet/dotnet-grpc-client
@@ -497,6 +462,7 @@ function test_grpc () {
     )
 }
 
+# build the Java submit JAR
 function build_jet_submit_java () {
     (
         cd jex-java/java-pipeline
@@ -504,7 +470,7 @@ function build_jet_submit_java () {
     )
 }
 
-# submit a pipeline via java
+# submit a job via Java
 function jet_submit_java () {
     (
         HZHOME=$DEMO/hazelcast/distribution/target/hazelcast-5.4.0-SNAPSHOT
@@ -525,22 +491,6 @@ function jet_submit_java () {
         java -classpath $CLASSPATH org.example.PythonJetUserCode
     )
 }
-
-# (ensure a standard Hazelcast server is running)
-#$CLZ start
-
-# verify that the job runs
-#$CLC job list
-
-# cancel the job with
-#$CLC job cancel my-job
-
-# example should run OK
-# also verify the server log
-
-# see 
-# https://stackoverflow.com/questions/3898665/what-is-in-bash
-# https://www.thegeekstuff.com/2010/05/bash-shell-special-parameters/
 
 CMDS=$1
 
