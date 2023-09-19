@@ -20,4 +20,4 @@ $RECYCLE.BIN/
 .github/secrets
 
 /**/publish/
-/java-pipeline/target/
+/jex-java/java-pipeline/target/
