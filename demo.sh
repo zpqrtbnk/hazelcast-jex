@@ -26,10 +26,12 @@ function init () {
     export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
     export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
     export LOGGING_LEVEL=DEBUG
-	export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
-	export DOCKER_NETWORK=jex # the network name for our demo
+    export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
+    export DOCKER_NETWORK=jex # the network name for our demo
     export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
-	export HELM=helm # name of Helm executable, can be 'mvn' or a full path
+    export HELM=helm # name of Helm executable, can be 'mvn' or a full path
+    export SANDBOX_KEY= # Viridian sandbox key (do NOT set it here but in the .user file)
+    export SANDBOX_SECRET= # Viridian sandbox secret (same)
     # --- configure environment ---
 
     SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -40,11 +42,17 @@ function init () {
     export CLI=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz-cli
     export CLZ=$DEMO/hazelcast/distribution/target/hazelcast-$HZVERSION/bin/hz
     export CLC="$DEMO/hazelcast-commandline-client/build/clc --config $DEMO/temp/clc-config.yml"
+    export VRD=$DEMO/vrd/build/vrd
     export HAZELCAST_CONFIG=$DEMO/hazelcast-cluster.xml
     export PYTHON=python3 # linux
     if [ "$OSTYPE" == "msys " ]; then
         export PYTHON=python # windows
     fi
+
+    #if [ -n "$SANDBOX_KEY" ]; then
+    #    export CLC_VIRIDIAN_API_KEY=$SANDBOX_KEY
+    #    export CLC_VIRIDIAN_API_SECRET=$SANDBOX_SECRET
+    #fi
 
     if [ ! -d $DEMO/temp ]; then
         mkdir $DEMO/temp
@@ -61,11 +69,13 @@ EOF
     alias demo=./demo.sh
     alias clz=$CLZ
     alias clc=$CLC
-	alias helm=$HELM
+    alias helm=$HELM
     alias mvn=$MVN
     alias kc=kubectl
     alias dk=docker
     alias kca='kubectl get all'
+    alias vrd=$VRD
+    alias vrdlogin="$VRD --api-key $SANDBOX_KEY --api-secret $SANDBOX_SECRET login"
 
     # Bash on Windows may produce paths such as /c/path/to/lib and Java wants c:\path\to\lib
     # and, in this case, the cygpath command *should* be available - and then we will use it
@@ -80,13 +90,14 @@ EOF
                           )
     complete -F _demo demo
 
-	echo "configured with:"
+    echo "configured with:"
     echo "    cluster name '$CLUSTERNAME'"
-	echo "    member at '$CLUSTERADDR'"
+    echo "    member at '$CLUSTERADDR'"
     echo "initialized the following aliases:"
     echo "    demo: invokes the demo script"
     echo "    clc:  invokes the clc with the demo config"
     echo "    clz:  invokes the cluster hz script"
+    echo "    vrd:  invokes vrd"
     echo "    mvn:  invokes Maven"
     echo "    helm: invokes Helm"
     echo "enjoy!"
@@ -148,6 +159,20 @@ function build_cluster_ee () {
     )
 }
 
+# build the Hazelcast EE (Java) project (in its submodule)
+function build_cluster_ee_nlc () {
+    (
+        cd hazelcast-enterprise
+        $MVN -Pquick -Pno-license-checker-build clean install
+        cd distribution/target
+        rm -rf hazelcast-enterprise-$HZVERSION
+        unzip hazelcast-enterprise-$HZVERSION.zip
+        cd ../..
+        cp hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION.jar \
+           distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+    )
+}
+
 # build the Hazelcast .NET (C#) client project (in its submodule)
 function build_client_dotnet () {
     # build the Hazelcast .NET client
@@ -204,35 +229,88 @@ function build_demo_dotnet () {
 # builds the Hazelcast cluster (OS+EE) Docker image
 function dk_cluster_build () {
 
-	# build hazelcast image
-	# from an existing official version (HZVERSION_DOCKER)
-	# which we overwrite with our temp version (HZVERSION) files
+    dk_cluster_build_image $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 	
-	BUILD_CONTEXT=$DEMO/temp/docker-build-context
-	if [ -d $BUILD_CONTEXT ]; then
-		rm -rf $BUILD_CONTEXT
-	fi
-	mkdir $BUILD_CONTEXT
-	
-	cp hazelcast/distribution/target/hazelcast-$HZVERSION/lib/*.jar $BUILD_CONTEXT
-	cp hazelcast-cluster-k8.xml $BUILD_CONTEXT/hazelcast.xml
-	ls $BUILD_CONTEXT
-	echo ""
-	
-	docker build \
-		-t $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER \
-		-f jobs/hazelcast.dockerfile \
-		--build-arg="HZVERSION=$HZVERSION_DOCKER" \
-		$BUILD_CONTEXT
-		
-	rm -rf $BUILD_CONTEXT
-	
-	docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:latest
-        docker push $DOCKER_REPOSITORY/hazelcast:latest
+    docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:latest
+    docker push $DOCKER_REPOSITORY/hazelcast:latest
 
-        DEVTAG=dev.2
-	docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:$DEVTAG
-        docker push $DOCKER_REPOSITORY/hazelcast:$DEVTAG
+    DEVTAG=dev.2
+    docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:$DEVTAG
+    docker push $DOCKER_REPOSITORY/hazelcast:$DEVTAG
+}
+
+function dk_quay_build () {
+
+    #IMAGE=quay.io/hz_stephane/hazelcast_dev:stephane.gay
+    IMAGE=quay.io/hazelcast_cloud/hazelcast-dev:stephane.gay
+    dk_cluster_build_image_ee $IMAGE
+    docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
+    docker push $IMAGE
+}
+
+function dk_cluster_build_image () {
+
+    # build hazelcast image
+    # from an existing official version (HZVERSION_DOCKER)
+    # which we overwrite with our temp version (HZVERSION) files
+	
+    BUILD_CONTEXT=$DEMO/temp/docker-build-context
+    if [ -d $BUILD_CONTEXT ]; then
+        rm -rf $BUILD_CONTEXT
+    fi
+    mkdir $BUILD_CONTEXT
+	
+    cp hazelcast/distribution/target/hazelcast-$HZVERSION/lib/*.jar $BUILD_CONTEXT
+    cp hazelcast-cluster-k8.xml $BUILD_CONTEXT/hazelcast.xml
+    ls $BUILD_CONTEXT
+    echo ""
+	
+    docker build \
+        -t $1 \
+        -f jobs/hazelcast.dockerfile \
+        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        $BUILD_CONTEXT
+		
+    rm -rf $BUILD_CONTEXT
+}
+
+function dk_cluster_build_image_ee () {
+
+    # build hazelcast EE image from scratch
+    # from our own build of OS and EE for our temp version (HZVERSION)
+	
+    BUILD_CONTEXT=$DEMO/temp/docker-build-context
+    if [ -d $BUILD_CONTEXT ]; then
+        rm -rf $BUILD_CONTEXT
+    fi
+    mkdir $BUILD_CONTEXT
+
+    # copy distribution from EE as expected by dockerfile
+    cp hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION.zip \
+       $BUILD_CONTEXT/hazelcast-enterprise-distribution.zip
+
+    # for some silly reason that JAR is not in the distribution at the moment
+    mkdir $BUILD_CONTEXT/lib
+    cp hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION-nlc.jar \
+       $BUILD_CONTEXT/lib/
+
+    # copy our own configuration file
+    cp dk8/hazelcast-ee.xml \
+       $BUILD_CONTEXT/hazelcast-usercode.xml
+
+    # copy hazelcast-docker stuff
+    cp -r hazelcast-docker/hazelcast-enterprise/* $BUILD_CONTEXT/
+
+    ls -lR $BUILD_CONTEXT
+    echo ""
+	
+    docker build \
+        -t $1 \
+        -f dk8/hazelcast-ee.dockerfile \
+        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        $BUILD_CONTEXT
+		
+    rm -rf $BUILD_CONTEXT
 }
 
 # executes the python runtime as a process
@@ -466,15 +544,17 @@ function test_grpc () {
 function build_jet_submit_java () {
     (
         cd jex-java/java-pipeline
-        $MVN package
+        $MVN clean package
     )
 }
 
 # submit a job via Java
 function jet_submit_java () {
     (
-        HZHOME=$DEMO/hazelcast/distribution/target/hazelcast-5.4.0-SNAPSHOT
-        TARGET=$DEMO/jex-java/java-pipeline/target
+        PIPELINE=java-pipeline-viridian
+        #HZHOME=$DEMO/hazelcast/distribution/target/hazelcast-5.4.0-SNAPSHOT
+        HZHOME=$DEMO/hazelcast-enterprise/distribution/target/hazelcast-enterprise-5.4.0-SNAPSHOT
+        TARGET=$DEMO/jex-java/$PIPELINE/target
         CLASSPATH="$TARGET/python-jet-usercode-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
 
         # trim CLASSPATH
