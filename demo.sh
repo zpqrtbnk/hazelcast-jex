@@ -556,6 +556,7 @@ function jet_submit_java () {
         HZHOME=$DEMO/hazelcast-enterprise/distribution/target/hazelcast-enterprise-5.4.0-SNAPSHOT
         TARGET=$DEMO/jex-java/$PIPELINE/target
         CLASSPATH="$TARGET/python-jet-usercode-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
+        #CLASSPATH="$HZHOME/lib:$HZHOME/lib/*"
 
         # trim CLASSPATH
         CLASSPATH="${CLASSPATH##:}"
@@ -568,7 +569,9 @@ function jet_submit_java () {
 
         # execute
         # -verbose:class
-        java -classpath $CLASSPATH org.example.PythonJetUserCode
+        # LOL good luck with that one, -jar excludes all --classpath
+        #java -classpath $CLASSPATH -jar $TARGET/python-jet-usercode-1.0-SNAPSHOT.jar ./jex-java/$PIPELINE/tls
+        java -classpath $CLASSPATH org.example.SubmitPythonJetUserCode ./jex-java/$PIPELINE/tls
     )
 }
 
