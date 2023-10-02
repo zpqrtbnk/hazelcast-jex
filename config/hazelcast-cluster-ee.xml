@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hazelcast xmlns="http://www.hazelcast.com/schema/config"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.hazelcast.com/schema/config
+           http://www.hazelcast.com/schema/config/hazelcast-config-5.0.xsd">
+
+  <cluster-name>dev</cluster-name>
+
+  <properties>
+        <!--
+            ZIP and TAR distributions binds only to loopback network interface (127.0.0.1),
+            Docker image listens on all interfaces (wildcard address).
+         -->
+        <!--<property name="hazelcast.socket.bind.any">true</property>-->
+        <!-- that does not work?! need export HZ_INSTANCETRACKING_FILENAME=instance-tracking.txt -->
+        <property name="hazelcast.instance-tracking.file-name">instance-tracking.txt</property>
+    </properties>
+
+  <!-- we need jet with resources upload -->
+  <jet enabled="true" resource-upload-enabled="true"></jet>
+
+  <!-- we need a journaled map -->
+  <map name="streamed-map">
+    <event-journal enabled="true">
+      <capacity>5000</capacity>
+      <time-to-live-seconds>60</time-to-live-seconds>
+    </event-journal>
+  </map>
+
+</hazelcast>

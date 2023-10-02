@@ -28,20 +28,39 @@ import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.HashMap;
 
+import org.json.JSONObject;
+
 public class SubmitPythonJetUserCode {
 
     public static void main(String[] args) throws Exception {
 
-        final boolean useResources = true; // flag to decide what mode to test
+        final boolean baseImage = true;
+
+        String secretsPath = args[0]; // eg 'path/to/a15q13hs'
+        String json = new String(Files.readAllBytes(Paths.get(secretsPath + "/config.json")), Charset.forName("utf-8"));
+        JSONObject secrets = new JSONObject(json);
+        JSONObject clusterSecrets = (JSONObject) secrets.get("cluster");
+        String clusterName = (String) clusterSecrets.get("name");
+        String token = (String) clusterSecrets.get("discovery-token");
+        String apiBase = (String) clusterSecrets.get("api-base");
+        JSONObject sslSecrets = (JSONObject) secrets.get("ssl");
+        String password = (String) sslSecrets.get("key-password");
+        String caPath = (String) sslSecrets.get("ca-path");
+        String certPath = (String) sslSecrets.get("cert-path");
+        String keyPath = (String) sslSecrets.get("key-path");
+
+        System.out.println("CLUSTER: " + clusterName);
+        System.out.println("API:     " + apiBase);
+        System.out.println("TOKEN:   " + token);
 
         final int parallelProcessors = 4; // 4 processors per member
         final int parallelOperations = 4; // 4 operations per processor
         final boolean preserveOrder = true;
 
-        final String imageName = useResources ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
+        final String imageName = baseImage ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
 
         UserCodeContainerConfig config = new UserCodeContainerConfig();
-        config.setImage(imageName);
+        config.setImageName(imageName);
         config.setPreserveOrder(preserveOrder);
         //config.setMaxConcurrentOps(parallelOperations); // Emre says "we don't provide concurrency at the moment"
         config.setName("PythonJetUserCode");
@@ -65,9 +84,15 @@ public class SubmitPythonJetUserCode {
         // submit
         JobConfig jobConfig = new JobConfig();
         jobConfig.addClass(SubmitPythonJetUserCode.class);
-        if (useResources) {
-            String dirPath = "/home/sgay/shared/hazelcast-usercode/python/example/custom/usercode";
+        if (baseImage) {
+            // attach the usercode directory
+            String dirPath = args[1];
             String dirId = "usercode";
+            jobConfig.attachDirectory(dirPath, dirId);
+            // attach the secrets directory
+            // BEWARE! for python we need the PEM files 
+            dirPath = secretsPath;
+            dirId = "secrets";
             jobConfig.attachDirectory(dirPath, dirId);
         }
 
@@ -76,14 +101,15 @@ public class SubmitPythonJetUserCode {
         // ah well, they *have* to be files, Viridian examples are misleading,
         // Hazelcast SSL layer does not support loading from embedded resources
         String keyStore, trustStore;
+        /*
         if (args.length > 0) {
-            keyStore = args[0] + "/client.keystore";
-            trustStore = args[0] + "/client.truststore";
+            keyStore = args[0] + "/" + clusterName + "/client.keystore";
+            trustStore = args[0] + "/" + clusterName + "/client.truststore";
         }
         else {
             ClassLoader classLoader = SubmitPythonJetUserCode.class.getClassLoader();
-            keyStore = classLoader.getResource("client.keystore").toURI()/*.getPath()*/.toString();
-            trustStore = classLoader.getResource("client.truststore").toURI()/*.getPath()*/.toString();
+            keyStore = classLoader.getResource("client.keystore").toURI().toString();
+            trustStore = classLoader.getResource("client.truststore").toURI().toString();
 
             URI uri = classLoader.getResource("client.truststore").toURI();
             // java never ceases to amaze - we need to amnually initialize the ZIP filesystem :(
@@ -98,20 +124,25 @@ public class SubmitPythonJetUserCode {
             System.out.println("trustore fs: " + Paths.get(uri).getFileSystem().toString());
             Files.readAllBytes(Paths.get(uri)); //, Charset.forName("utf-8"));
         }
+        */
+
+        keyStore = secretsPath + "/client.keystore";
+        trustStore = secretsPath + "/client.truststore";
+
+        System.out.println("keyStore:   " + keyStore);
+        System.out.println("trustStore: " + trustStore);
 
 	// copied from Viridian Java sample
 	Properties props = new Properties();
         props.setProperty("javax.net.ssl.keyStore", keyStore);
-        props.setProperty("javax.net.ssl.keyStorePassword", "ba45a1bd5ae");
+        props.setProperty("javax.net.ssl.keyStorePassword", password);
         props.setProperty("javax.net.ssl.trustStore", trustStore);
-        props.setProperty("javax.net.ssl.trustStorePassword", "ba45a1bd5ae");
+        props.setProperty("javax.net.ssl.trustStorePassword", password);
         ClientConfig clientConfig = new ClientConfig();
         clientConfig.getNetworkConfig().setSSLConfig(new SSLConfig().setEnabled(true).setProperties(props));
-        clientConfig.getNetworkConfig().getCloudConfig()
-            .setDiscoveryToken("nas3ahS8KhMiyR5NdEgFcUfXVCJK0Y7YBzoPEi7DmohYhNEEhc")
-            .setEnabled(true);
-        clientConfig.setProperty("hazelcast.client.cloud.url", "https://api.sandbox.viridian.hazelcast.cloud");
-        clientConfig.setClusterName("sa-rhe5ao1e");
+        clientConfig.getNetworkConfig().getCloudConfig().setDiscoveryToken(token).setEnabled(true);
+        clientConfig.setProperty("hazelcast.client.cloud.url", apiBase);
+        clientConfig.setClusterName(clusterName);
 
         //ClientConfig clientConfig = new ClientConfig();
         //clientConfig.setClusterName("dev");

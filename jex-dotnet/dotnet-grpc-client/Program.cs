@@ -46,8 +46,8 @@ public class Program
             jobId = JobIdToString(jobNumId);
 
             // upload the resource named resuilops
-            var resourceId = "uzerkode";
-            var path = "../../../hazelcast-usercode/python/example/usercode";
+            var resourceId = "usercode";
+            var path = "../../hazelcast-usercode/python/example";
             await UploadDirectoryResourceAsync(hzclient, jobNumId, resourceId, path);
             Console.WriteLine("Uploaded resource.");
         }
@@ -63,16 +63,28 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .CONNECT");
+        // var connectArgs = @"
+        // {
+        //     ""job"": {
+        //         ""id"": ""%%JOBID%%"",
+        //         ""resources"": [
+        //             {
+        //                 ""type"": ""DIRECTORY"",
+        //                 ""id"": ""usercode""
+        //             }
+        //         ]
+        //     },
+        //     ""cluster"": {
+        //         ""name"": ""dev"",
+        //         ""address"": ""localhost:5701""
+        //     }
+            
+        // }
+        // ";
         var connectArgs = @"
         {
             ""job"": {
-                ""id"": ""%%JOBID%%"",
-                ""resources"": [
-                    {
-                        ""type"": ""DIRECTORY"",
-                        ""id"": ""uzerkode""
-                    }
-                ]
+                ""id"": ""%%JOBID%%""
             },
             ""cluster"": {
                 ""name"": ""dev"",
@@ -151,10 +163,9 @@ public class Program
             //Console.WriteLine($"value: {mapEntry.GetKey<object>()}");
         }
 
-/*
         Console.WriteLine("--------");
         Console.WriteLine("send: .COPY");
-        var fileObject = new FileObject {Path = "path/to/file.txt", Bytes = File.ReadAllBytes("file.txt")};
+        var fileObject = new FileObject {Path = "path/to/random-file.txt", Bytes = File.ReadAllBytes("random-file.txt")};
         payload = await client.ToByteArray(fileObject);
         var copyMessage = new UserCodeMessage(id++, UserCodeMessageType.Copy, payload);
         await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
@@ -169,7 +180,7 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .COPY_ZIP");
-        fileObject = new FileObject { Path = "path/to/file.txt", Bytes = File.ReadAllBytes("file.txt") };
+        fileObject = new FileObject { Path = "path/to/random-file.txt", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.txt") };
         payload = await client.ToByteArray(fileObject);
         copyMessage = new UserCodeMessage(id++, UserCodeMessageType.CopyZip, payload);
         await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
@@ -188,7 +199,7 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .COPY");
-        fileObject = new FileObject { Path = "/path/to/file.txt", Bytes = File.ReadAllBytes("file.txt") };
+        fileObject = new FileObject { Path = "/path/to/random-file.txt", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.txt") };
         payload = await client.ToByteArray(fileObject);
         copyMessage = new UserCodeMessage(id++, UserCodeMessageType.Copy, payload);
         await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
@@ -207,7 +218,7 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .COPY");
-        fileObject = new FileObject { Path = "path/../../../to/file.txt", Bytes = File.ReadAllBytes("file.txt") };
+        fileObject = new FileObject { Path = "path/../../../to/random-file.txt", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.txt") };
         payload = await client.ToByteArray(fileObject);
         copyMessage = new UserCodeMessage(id++, UserCodeMessageType.Copy, payload);
         await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
@@ -226,7 +237,7 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .COPY_ZIP");
-        fileObject = new FileObject { Path = "path/to/file.zip", Bytes = File.ReadAllBytes("file.zip") };
+        fileObject = new FileObject { Path = "path/to/random-file.zip", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.zip") };
         payload = await client.ToByteArray(fileObject);
         copyMessage = new UserCodeMessage(id++, UserCodeMessageType.CopyZip, payload);
         await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
@@ -241,7 +252,7 @@ public class Program
 
         Console.WriteLine("--------");
         Console.WriteLine("send: .COPY_ZIP");
-        fileObject = new FileObject { Path = "file.zip", Bytes = File.ReadAllBytes("file.zip") };
+        fileObject = new FileObject { Path = "random-file.zip", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.zip") };
         payload = await client.ToByteArray(fileObject);
         copyMessage = new UserCodeMessage(id++, UserCodeMessageType.CopyZip, payload);
         await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
@@ -253,7 +264,7 @@ public class Program
             Console.WriteLine("ERROR: " + response.PayloadString);
             return;
         }
-*/
+
         Console.WriteLine("--------");
         Console.WriteLine("send: .END");
         var endMessage = new UserCodeMessage(id++, UserCodeMessageType.End);
