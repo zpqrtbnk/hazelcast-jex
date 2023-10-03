@@ -65,7 +65,6 @@ RUN echo "Installing new packages" \
 
 COPY log4j2.properties log4j2-json.properties jmx_agent_config.yaml ${HZ_HOME}/config/
 COPY hazelcast-usercode.xml ${HZ_HOME}/config/
-COPY lib/*.jar ${HZ_HOME}/lib/
 
 RUN echo "Adding non-root user" \
     && groupadd --system hazelcast \

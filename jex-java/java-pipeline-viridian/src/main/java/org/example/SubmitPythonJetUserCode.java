@@ -53,8 +53,8 @@ public class SubmitPythonJetUserCode {
         System.out.println("API:     " + apiBase);
         System.out.println("TOKEN:   " + token);
 
-        final int parallelProcessors = 4; // 4 processors per member
-        final int parallelOperations = 4; // 4 operations per processor
+        final int parallelProcessors = 2; // processors per member
+        final int parallelOperations = 1; // operations per processor
         final boolean preserveOrder = true;
 
         final String imageName = baseImage ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";

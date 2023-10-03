@@ -30,7 +30,6 @@ function init () {
     export HELM=helm # name of Helm executable, can be 'mvn' or a full path
     export SANDBOX_KEY= # Viridian sandbox key (do NOT set it here but in the .user file)
     export SANDBOX_SECRET= # Viridian sandbox secret (same)
-    export NO_LICENSE_CHECK=0 # whether to disable EE license check
     export HZ_LICENSEKEY= # a license key
     # --- configure environment ---
 
@@ -183,7 +182,7 @@ function build_cluster_ee () {(
     # configure for license check
     NLC=""
     MVNLC=""
-    if [ $NO_LICENSE_CHECK -eq 1 ]; then
+    if [ "$1" == "NLC" ]; then
       NLC="-nlc"
       MVNLC="-Pno-license-checker-build"
     fi
@@ -419,7 +418,7 @@ function dk_cluster_run () {
 }
 
 # run the Python runtime via Docker (for passthru)
-function dk_runtime_python_run () {
+function dk_runtime_run_python () {
 
     # BEWARE! the job need to know the address of the gRPC runtime server
 
@@ -434,7 +433,7 @@ function dk_runtime_python_run () {
 }
 
 # run the Dotnet runtime via Docker (for passthru)
-function dk_runtime_dotnet_run () {
+function dk_runtime_run_dotnet () {
 
 	# BEWARE! the job need to know the address of the gRPC runtime server
 
