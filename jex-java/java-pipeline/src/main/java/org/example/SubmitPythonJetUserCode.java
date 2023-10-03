@@ -30,15 +30,16 @@ public class SubmitPythonJetUserCode {
     // - process: will start process, ...
     // - container: need name of image + resources to be COPYed
 
-    static String usercodePath = null; //path[];
-    static String secretsPath = null; //path[];
+    static String usercodePath = null;
+    static String secretsPath = null;
     static boolean attachCode;
     static boolean attachSecrets;
 
     public static void main(String[] args) {
 
         if (args.length != 2) {
-            System.out.println("usage");
+            System.out.println("usage: submit <usercode-path> <secrets-path>");
+            System.out.println("  both args are required, use NULL to omit value");
             return;
         }
 
