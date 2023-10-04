@@ -16,3 +16,6 @@
 [submodule "hazelcast-usercode"]
 	path = hazelcast-usercode
 	url = https://github.com/zpqrtbnk/hazelcast-usercode
+[submodule "clc"]
+	path = clc
+	url = https://github.com/hazelcast/clc
