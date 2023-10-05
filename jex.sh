@@ -2,20 +2,24 @@
 # HAZELCAST JEX JEX SCRIPT
 #
 
-# run '. ./jex.sh init' in order to initialize the environment
+# 
+# - copy the '--- configure environment ---' section below into
+#   a jex.sh.user file, then edit that file with your own settings
+# - execute '. ./jex.sh init' in order to initialize the environment
+#   (the first dot is important)
+# - execute 'jex help' to list available methods
+#
+
 
 # NOTE
 # add '--entrypoint /bin/bash' to override entrypoint and inspect the content of a container
 # forward ports: kc port-forward --namespace default runtime-controller-68cc497fcb-bk56w 50051:50051
 # shell into a k8 pod: kc exec -it hazelcast-0 -- /bin/bash
 
+__init () { echo "Initialize JEX"; }
+init () {
 
-function init () {
-
-    # NOTE
-    # avoid editing jex.sh (and commiting changes to source revision)
-    # instead, create a jex.sh.user file alongside jex.sh with only
-    # the required changes, this file is .gitignored.
+    # BEWARE! do NOT edit the section below, use the jex.sh.user file instead
 
     # --- configure environment ---
     export JEX=/path/to/hazelcast-jex # path to the jex root
@@ -83,7 +87,7 @@ EOF
         export CYGPATH=cygpath
     fi
 	
-    export JEX_COMMANDS=$( grep -E '^function\s[A-Za-z0-9][A-Za-z0-9_]*(\s|\()' jex.sh | cut -d " " -f 2 )
+	export JEX_COMMANDS=$( ${BASH_SOURCE[0]} -commands )
     complete -F _jex jex
 
     echo "configured with:"
@@ -100,7 +104,27 @@ EOF
     echo ""
 }
 
-function _jex() {
+
+_commands () { echo $( declare -F | cut -d " " -f 3 | grep -ve '^_' | sort ); }
+
+
+__help () { echo "Display JEX help"; }
+help() {
+	help=""
+	for i in $( echo $JEX_COMMANDS | sort ); do
+	    if [[ $(LC_ALL=C type -t __$i) == function ]]; then
+			d=$( __$i )
+		else
+			d="?"
+		fi
+    	i=$( echo $i | sed 's/_/-/g' )
+		help="$help$i\t$d\n"
+	done
+	echo -e $help | column -t -s $'\t'
+}
+
+
+_jex() {
     local cur
     # COMP_WORDS is an array containing all individual words in the current command line
     # COMP_CWORD is the index of the word contianing the current cursor position
@@ -113,11 +137,13 @@ function _jex() {
     return 0
 }
 
-function _abspath () {
+
+_abspath () {
     (cd $(dirname $1); echo "$(pwd)/$(basename $1)")
 }
 
-function _classpath () {
+
+_classpath () {
 
     CLASSPATH=$1
 
@@ -133,9 +159,9 @@ function _classpath () {
     echo $CLASSPATH
 }
 
-# gets the Viridian secrets, using the CLC link
-# usage: jex get_secrets https://....
-function get_secrets () {
+
+__get_secrets () { echo "Get the Viridian secrets, using the CLC link"; }
+get_secrets () {
 
     SECRETS=$JEX/temp/viridian-secrets
     curl -o $SECRETS.zip $1
@@ -151,8 +177,9 @@ function get_secrets () {
     echo $VIRIDIAN_ID > $SECRETS/id
 }
 
-# build the Hazelcast CLC (Go) project
-function build_clc () {(
+
+__build_clc () { echo "Build the CLC project"; }
+build_clc () {(
     cd clc
     CLC_VERSION=UNKNOWN
     GIT_COMMIT=
@@ -161,7 +188,7 @@ function build_clc () {(
     LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
     LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
     LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
-    if [ "$OSTYPE" == "msys " ]; then
+    if [ "$OSTYPE" == "msys" ]; then
         echo "go-winres make"
         go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
     fi
@@ -169,16 +196,28 @@ function build_clc () {(
     go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc ./cmd/clc
 )}
 
-# build the Hazelcast OS (Java) project
-function build_cluster_os () {(
+
+__build_cluster_os () { echo "Build the Hazelcast OS project"; }
+build_cluster_os () {(
     cd hazelcast
 
     $MVN clean install -DskipTests -Dcheckstyle.skip=true
 )}
 
-# build the Hazelcast EE (Java) project
-# and patch + unzip the distribution
-function build_cluster_ee () {(
+
+__build_cluster_ee () { echo "Build the Hazelcast EE project (with license check)"; }
+build_cluster_ee () {(
+	_build_cluster_ee
+)}
+
+
+__build_cluster_ee_nlc () { echo "Build the Hazelcast EE project (no license check)"; }
+build_cluster_ee_nlc () {(
+	_build_cluster_ee NLC
+)}
+
+
+_build_cluster_ee () {(
 
     # configure for license check
     NLC=""
@@ -206,8 +245,9 @@ EOF
         distribution/target/hazelcast-enterprise-$HZVERSION/lib 
 )}
 
-# build the Hazelcast .NET (C#) client project
-function build_client_dotnet () {(
+
+__build_client_dotnet () { echo "Build the .NET client project"; }
+build_client_dotnet () {(
 
     # build the Hazelcast .NET client, including the new packages
     # and cleanup the package cache because we are not bumping the version,
@@ -219,7 +259,8 @@ function build_client_dotnet () {(
     rm -rf ~/.nuget/packages/hazelcast.net.*
 )}
 
-# build the various .NET projects used for the demos
+
+__build_jex_dotnet () { echo "Build all the JEX .NET projects"; }
 function build_jex_dotnet () {(
 
     # build the demo code
@@ -258,9 +299,9 @@ function build_jex_dotnet () {(
     )
 )}
 
-# executes the python runtime as a process
-# can be useful to test with the passthru runtime service
-function runtime_python () {(
+
+__run_runtime_python () { echo "Run a Python runtime"; }
+run_runtime_python () {(
 
     # code is provided
     #CODE_PATH=$JEX/hazelcast-usercode/python/example
@@ -276,25 +317,27 @@ function runtime_python () {(
         --grpc-port 5252 --log-level=DEBUG
 )}
 
-# executes the .NET+gRPC runtime as a process
-# can be useful to test with the passthru runtime service
-function runtime_dotnet_grpc () {(
+
+__run_runtime_dotnet_grpc () { echo "Run a .NET runtime (gRPC)"; }
+run_runtime_dotnet_grpc () {(
 
     cd jex-dotnet/dotnet-grpc
     dotnet run
 )}
 
-# run a temp Docker container running busybox sh
-function dk_sh () {
+
+__run_dk_sh () { echo "Run a Docker busybox shell"; }
+run_dk_sh () {
 
 	docker run -it --rm --net jex \
 		--name tempsh -h tempsh \
 		busybox sh
 }
 
+
 # builds the Hazelcast cluster (OS+EE) Docker single-platform image and push to registry
 # (assuming that the OS+EE projects have been built already)
-function dk_cluster_build_local () {
+_OBSOLETE_dk_cluster_build_local () {
 
     IMAGE=$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 
@@ -313,9 +356,9 @@ function dk_cluster_build_local () {
     docker push $DOCKER_REPOSITORY/hazelcast:latest
 }
 
-# builds the Hazelcast cluster (OS+EE) Docker multi-platform image and push to Quay
-# (assuming that the OS+EE projects have been built already)
-function dk_cluster_build_quay () {(
+
+__build_dk_cluster_quay () { echo "Build the cluster Docker image for Quay (requires NLC EE)"; }
+build_dk_cluster_quay () {(
 
     #IMAGE=quay.io/hz_stephane/hazelcast_dev:stephane.gay
     IMAGE=quay.io/hazelcast_cloud/hazelcast-dev:stephane.gay
@@ -333,7 +376,7 @@ function dk_cluster_build_quay () {(
     _dk_cluster_clear_image
 )}
 
-function _dk_cluster_prepare_image () {
+_dk_cluster_prepare_image () {
 
     # build Hazelcast EE docker image from scratch
     # from our own build of OS and EE for version $HZVERSION
@@ -361,7 +404,7 @@ function _dk_cluster_prepare_image () {
     cp -r hazelcast-docker/hazelcast-enterprise/* $DOCKER_SOURCE/
 }
 
-function _dk_cluster_buildx_image () {
+_dk_cluster_buildx_image () {
 
     # build and push (need to do both at once due to multi-platform)
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
@@ -371,12 +414,13 @@ function _dk_cluster_buildx_image () {
         $DOCKER_SOURCE
 }
 
-function _dk_cluster_clear_image () {		
+_dk_cluster_clear_image () {		
     rm -rf $DOCKER_SOURCE
 }
 
-# build the Python runtime Docker images
-function dk_runtime_build_python () {
+
+__build_dk_runtime_python () { echo "Build the Python runtime Docker images"; }
+build_dk_runtime_python () {
 
     #BASE_IMAGE=$DOCKER_REPOSITORY/python-usercode-base:latest
     BASE_IMAGE=quay.io/hz_stephane/python-usercode-base:latest
@@ -401,8 +445,9 @@ function dk_runtime_build_python () {
     #docker push $DOCKER_REPOSITORY/python-usercode:latest
 }
 
-# build the Dotnet runtime Docker images
-function dk_runtime_build_dotnet () {
+
+__build_dk_runtime_dotnet () { echo "Build the .NET runtime Docker images (gRPC)"; }
+build_dk_runtime_dotnet () {
 
     # meh: build usercode vs usercode-base?
 
@@ -415,7 +460,7 @@ function dk_runtime_build_dotnet () {
 }
 
 # initialize Docker (custom network...)
-function dk_initialize () {
+dk_initialize () {
 
 	docker network ls | grep -q $DOCKER_NETWORK
 	if [ $? -eq 1 ]; then
@@ -423,8 +468,9 @@ function dk_initialize () {
 	fi
 }
 
-# run the docker member
-function dk_cluster_run () {
+
+__run_dk_cluster () { echo "Run a Docker cluster"; }
+run_dk_cluster () {
 
 	# removed:
 	#   -v $JEX/hazelcast-cluster.xml:/opt/hazelcast/hazelcast.xml \
@@ -445,8 +491,9 @@ function dk_cluster_run () {
 		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 }
 
-# run the Python runtime via Docker (for passthru)
-function dk_runtime_run_python () {
+
+__run_dk_runtime_python () { echo "Run a Docker Python runtime"; }
+run_dk_runtime_python () {
 
     # BEWARE! the job need to know the address of the gRPC runtime server
 
@@ -460,8 +507,9 @@ function dk_runtime_run_python () {
         $IMAGE
 }
 
-# run the Dotnet runtime via Docker (for passthru)
-function dk_runtime_run_dotnet () {
+
+__run_dk_runtime_dotnet () { echo "Run a Docker .NET runtime (gRPC)"; }
+run_dk_runtime_dotnet () {
 
 	# BEWARE! the job need to know the address of the gRPC runtime server
 
@@ -475,8 +523,8 @@ function dk_runtime_run_dotnet () {
         $IMAGE
 }
 
-#
-function k8_login_quay () {
+__k8_login_quay () { echo "Log into Quay and create the k8 secret"; }
+k8_login_quay () {
 
     docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
     kubectl create secret generic quay-pull-secret \
@@ -484,8 +532,9 @@ function k8_login_quay () {
         --type=kubernetes.io/dockerconfigjson
 }
 
-# start the k8 runtime controller
-function k8_controller_start () {
+
+__start_k8_controller () { echo "Start the k8 runtime controller"; }
+start_k8_controller () {
 
     # alt. helm install runtime-controller runtime-controller/runtime-controller --set ...
     # not entirely sure which is best - but with latest version we need to be logged into Quay
@@ -493,14 +542,16 @@ function k8_controller_start () {
         --set imagePullSecrets[0].name=quay-pull-secret
 }
 
-# stop the k8 runtime controller
-function k8_controller_stop () {
+
+__stop_k8_controller () { echo "Stop the k8 runtime controller"; }
+stop_k8_controller () {
 
 	$HELM delete runtime-controller
 }
 
-# start the k8 cluster
-function k8_cluster_start () {
+
+__start_k8_cluster () { echo "Start the k8 cluster"; }
+start_k8_cluster () {
 
     # BEWARE! runtime controller address and port, etc in member-values.yaml 
 
@@ -525,22 +576,26 @@ function k8_cluster_start () {
 #    rm temp/helm-cluster.yaml
 }
 
-# stop the k8 cluster
-function k8_cluster_stop () {
+
+__stop_k8_cluster () { echo "Strop the k8 cluster"; }
+stop_k8_cluster () {
 
 	$HELM delete hazelcast
 }
 
-# get the k8 cluster logs
-function k8_cluster_logs () {
+
+__show_k8_cluster_logs () { echo "Show the k8 cluster logs"; }
+show_k8_cluster_logs () {
 	kubectl logs hazelcast-0
 }
 
-# get a detailed report on our k8 environment
-function k8_show () {
+
+__show_k8 () { echo "Show the k8 state"; }
+ show_k8 () {
 	kubectl get pod --output=wide
 	kubectl get svc
 }
+
 
 # submit jobs, the .NET way
 # OBSOLETE - should use the CLC now, e.g.:
@@ -582,24 +637,20 @@ function _OBSOLETE_submit_dotnet () {
     )
 }
 
-# build the "submit the python job on local via java" java code
-function build_submit_local_java () {(
 
-    PIPELINE=java-pipeline
-    cd jex-java/$PIPELINE
-    $MVN clean package
+__build_jex_java () { echo "Build all the jex Java projects"; }
+build_jex_java () {(
+	cd jex-java/java-pipeline
+	$MVN clean package
+)
+(
+	cd jex-java/java-pipeline-Viridian
+	$MVN clean package
 )}
 
-# build the "submit the python job on viridian via java" java code
-function build_submit_viridian_java () {(
 
-    PIPELINE=java-pipeline-viridian
-    cd jex-java/$PIPELINE
-    $MVN clean package
-)}
-
-# submit the python job on local via java
-function submit_local_java () {(
+__submit_local_java () { echo "Submit job to local cluster from Java"; }
+submit_local_java () {(
 
     PIPELINE=java-pipeline
     HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
@@ -616,8 +667,9 @@ function submit_local_java () {(
         $SECRETS_PATH
 )}
 
-# submit the python job on viridian via java
-function submit_viridian_java () {(
+
+__submit_viridian_java () { echo "Submit job to Viridian sandbox cluster from Java"; }
+submit_viridian_java () {(
 
     VIRIDIAN_ID=$( cat $JEX/temp/viridian-secrets/id )
 
@@ -632,17 +684,17 @@ function submit_viridian_java () {(
         $JEX/temp/viridian-secrets/$VIRIDIAN_ID
 )}
 
-# run the demo example
-# (puts stuff into a map and expects stuff to appear in another map, if the python job is running)
-function run_example () {(
+
+__run_example () { echo "Run the .NET example app"; }
+run_example () {(
 
     cd jex-dotnet/dotnet-example
     dotnet run -- --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR
 )}
 
-# run the gRPC test client
-# (against a locally-running gRPC runtime)
-function run_grpc_test () {(
+
+__run_test_grpc () { echo "Run the .NET gRPC test app"; }
+run_test_grpc () {(
 
     cd jex-dotnet/dotnet-grpc-client
     dotnet run 
@@ -658,7 +710,9 @@ fi
 shift
 for cmd in $(IFS=,;echo $CMDS); do
     cmd=${cmd//-/_}
-    echo "JEX: $cmd $@"
+	if [ "$cmd" != "_commands" ]; then
+		echo "JEX: $cmd $@"
+	fi
     eval $cmd $@
     if [ $? -ne 0 ]; then break; fi
 done
