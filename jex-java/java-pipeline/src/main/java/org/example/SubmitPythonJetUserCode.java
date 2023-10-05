@@ -59,13 +59,13 @@ public class SubmitPythonJetUserCode {
                 .withIngestionTimestamps();
 
         StreamStage<Map.Entry<Object,Object>> stage2 
-            = SubmitPythonJetUserCode.<Map.Entry<Object,Object>>applyMapUsingUserCodePassthru(stage, jobConfig);
+            = SubmitPythonJetUserCode.<Map.Entry<Object,Object>>applyMapUsingUserCodeContainer(stage, jobConfig);
         stage2.writeTo(Sinks.map("result-map"));
 
         ClientConfig clientConfig = new ClientConfig();
         clientConfig.setClusterName("dev");
-        //clientConfig.getNetworkConfig().addAddress("192.168.1.200:5701");
-        clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
+        clientConfig.getNetworkConfig().addAddress("192.168.1.200:5701");
+        //clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
         HazelcastInstance hz = HazelcastClient.newHazelcastClient(clientConfig);
 
         hz.getJet().newJob(pipeline, jobConfig);
@@ -73,7 +73,10 @@ public class SubmitPythonJetUserCode {
 
     private static <T> StreamStage<T> applyMapUsingUserCodeContainer(StreamStage<?> stage, JobConfig jobConfig) {
 
-        final String imageName = attachCode ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
+        //final String imageName = attachCode ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
+        final String imageName = attachCode
+            ? "quay.io/hz_stephane/python-usercode-base:latest"
+            : "quay.io/hz_stephane/python-usercode:latest";
 
         UserCodeContainerConfig config = new UserCodeContainerConfig();
         config.setImageName(imageName);

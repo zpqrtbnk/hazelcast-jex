@@ -9,6 +9,9 @@ mancenter:
   enabled: false
 cluster:
   memberCount: 1
+# specifies whether the root filesystem is readonly or not
+securityContext:
+  readOnlyRootFilesystem: false
 service:
   # ClusterIp, LoadBalancer or NodePort
   type: LoadBalancer
@@ -30,6 +33,7 @@ hazelcast:
         hazelcast.usercode.controller.port: 50051
         hazelcast.usercode.controller.address: runtime-controller
         hazelcast.usercode.runtime.port: 5252
+        hazelcast.usercode.runtime.invocation.deadline.seconds: 120
       network:
         join:
           kubernetes:

@@ -38,6 +38,11 @@ public class SubmitPythonJetUserCode {
     final static int parallelOperations = 1; // operations per processor
     final static boolean preserveOrder = true;
 
+    static String usercodePath = null;
+    static String secretsPath = null;
+    static boolean attachCode;
+    static boolean attachSecrets;
+
     public static void main(String[] args) throws Exception {
 
         if (args.length != 2) {
@@ -81,8 +86,8 @@ public class SubmitPythonJetUserCode {
             = SubmitPythonJetUserCode.<Map.Entry<Object,Object>>applyMapUsingUserCodeContainer(stage, jobConfig);
         stage2.writeTo(Sinks.map("result-map"));
 
-        keyStore = secretsPath + "/client.keystore";
-        trustStore = secretsPath + "/client.truststore";
+        String keyStore = secretsPath + "/client.keystore";
+        String trustStore = secretsPath + "/client.truststore";
 
         System.out.println("keyStore:   " + keyStore);
         System.out.println("trustStore: " + trustStore);
@@ -106,7 +111,11 @@ public class SubmitPythonJetUserCode {
 
     private static <T> StreamStage<T> applyMapUsingUserCodeContainer(StreamStage<?> stage, JobConfig jobConfig) {
 
-        final String imageName = attachCode ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
+        //final String imageName = attachCode ? "zpqrtbnk/python-usercode-base" : "zpqrtbnk/python-usercode";
+        // must use Quay for multi-arch
+        final String imageName = attachCode
+            ? "quay.io/hz_stephane/python-usercode-base:latest"
+            : "quay.io/hz_stephane/python-usercode:latest";
 
         UserCodeContainerConfig config = new UserCodeContainerConfig();
         config.setImageName(imageName);

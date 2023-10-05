@@ -57,6 +57,8 @@
         <property name="hazelcast.usercode.controller.port">50051</property>
         <property name="hazelcast.usercode.controller.address">runtime-controller</property>
         <property name="hazelcast.usercode.runtime.port">5252</property>
+
+        <property name="hazelcast.usercode.runtime.invocation.deadline.seconds">240</property>
     </properties>
 
     <network>

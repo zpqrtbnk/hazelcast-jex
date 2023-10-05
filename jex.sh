@@ -40,7 +40,7 @@ function init () {
 
     export CLI=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/bin/hz-cli
     export CLZ=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/bin/hz
-    export CLC="$JEX/hazelcast-commandline-client/build/clc --config $JEX/temp/clc-config.yml"
+    export CLC="$JEX/clc/build/clc" # --config $JEX/temp/clc-config.yml"
     export VRD=$JEX/vrd/build/vrd
     export HAZELCAST_CONFIG=$JEX/config/hazelcast-cluster.xml
     export PYTHON=python3 # linux
@@ -152,21 +152,22 @@ function get_secrets () {
 }
 
 # build the Hazelcast CLC (Go) project
-function build_clc () {
-    (cd hazelcast-commandline-client &&
-        CLC_VERSION=UNKNOWN
-        GIT_COMMIT=
-        LDFLAGS=""
-        LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.GitCommit=$GIT_COMMIT'"
-        LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
-        LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
-        LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
-        if [ "$OSTYPE" == "msys " ]; then
-            go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
-        fi
-        go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc ./cmd/clc
-    )
-}
+function build_clc () {(
+    cd clc
+    CLC_VERSION=UNKNOWN
+    GIT_COMMIT=
+    LDFLAGS=""
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.GitCommit=$GIT_COMMIT'"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
+    if [ "$OSTYPE" == "msys " ]; then
+        echo "go-winres make"
+        go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
+    fi
+    echo "go build"
+    go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc ./cmd/clc
+)}
 
 # build the Hazelcast OS (Java) project
 function build_cluster_os () {(
@@ -293,9 +294,20 @@ function dk_sh () {
 
 # builds the Hazelcast cluster (OS+EE) Docker single-platform image and push to registry
 # (assuming that the OS+EE projects have been built already)
-function _OBSOLETE_dk_cluster_build_local () {
+function dk_cluster_build_local () {
 
-    dk_cluster_build_image $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
+    IMAGE=$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
+
+    _dk_cluster_prepare_image
+
+    # build
+    docker build \
+        -t $IMAGE \
+        -f dk8/hazelcast-ee.dockerfile \
+        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        $DOCKER_SOURCE
+
+    _dk_cluster_clear_image
 	
     docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:latest
     docker push $DOCKER_REPOSITORY/hazelcast:latest
@@ -307,21 +319,25 @@ function dk_cluster_build_quay () {(
 
     #IMAGE=quay.io/hz_stephane/hazelcast_dev:stephane.gay
     IMAGE=quay.io/hazelcast_cloud/hazelcast-dev:stephane.gay
+
+    _dk_cluster_prepare_image
+
+    # build and push (need to do both at once due to multi-platform)
     docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
-    _dk_cluster_build_image $IMAGE
+    docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+        -t $IMAGE \
+        -f dk8/hazelcast-ee.dockerfile \
+        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        $DOCKER_SOURCE
+
+    _dk_cluster_clear_image
 )}
 
-function _dk_cluster_build_image () {
+function _dk_cluster_prepare_image () {
 
     # build Hazelcast EE docker image from scratch
     # from our own build of OS and EE for version $HZVERSION
 
-    # configure for license check
-    NLC=""
-    if [ $NO_LICENSE_CHECK -eq 1 ]; then
-      NLC="-nlc"
-    fi
-	
     DOCKER_SOURCE=$JEX/temp/docker-source
     if [ -d $DOCKER_SOURCE ]; then
         rm -rf $DOCKER_SOURCE
@@ -335,13 +351,17 @@ function _dk_cluster_build_image () {
 
     # for some silly reason that JAR is not in the distribution at the moment
     mkdir $DOCKER_SOURCE/lib
-    cp $ENTERPRISE/hazelcast-enterprise-usercode-$HZVERSION$NLC.jar $DOCKER_SOURCE/lib/
+    ls hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION*.jar
+    cp hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION*.jar $DOCKER_SOURCE/lib/
 
     # copy our own configuration file
     cp config/hazelcast-ee.xml $DOCKER_SOURCE/hazelcast-usercode.xml
 
     # copy hazelcast-docker stuff
     cp -r hazelcast-docker/hazelcast-enterprise/* $DOCKER_SOURCE/
+}
+
+function _dk_cluster_buildx_image () {
 
     # build and push (need to do both at once due to multi-platform)
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
@@ -349,28 +369,36 @@ function _dk_cluster_build_image () {
         -f dk8/hazelcast-ee.dockerfile \
         --build-arg="HZVERSION=$HZVERSION_DOCKER" \
         $DOCKER_SOURCE
-		
+}
+
+function _dk_cluster_clear_image () {		
     rm -rf $DOCKER_SOURCE
 }
 
 # build the Python runtime Docker images
 function dk_runtime_build_python () {
 
-    # build a base image
-    docker build \
-        -t $DOCKER_REPOSITORY/python-usercode-base:latest \
+    #BASE_IMAGE=$DOCKER_REPOSITORY/python-usercode-base:latest
+    BASE_IMAGE=quay.io/hz_stephane/python-usercode-base:latest
+
+    #EXAMPLE_IMAGE=$DOCKER_REPOSITORY/python-usercode:latest
+    EXAMPLE_IMAGE=quay.io/hz_stephane/python-usercode:latest
+
+    # build a base image - and push (need to do both at once due to multi-platform)
+    docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+        -t $BASE_IMAGE \
         -f hazelcast-usercode/python/docker/dockerfile.base \
         hazelcast-usercode/python
 
-	docker push $DOCKER_REPOSITORY/python-usercode-base:latest
+    #docker push $DOCKER_REPOSITORY/python-usercode-base:latest
 
-    # build an example image (with actual usercode included)
-    docker build \
-        -t $DOCKER_REPOSITORY/python-usercode:latest \
+    # build an example image (with actual usercode included) - and push (...)
+    docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+        -t $EXAMPLE_IMAGE \
         -f hazelcast-usercode/python/docker/dockerfile.example \
         hazelcast-usercode/python/example
 
-	docker push $DOCKER_REPOSITORY/python-usercode:latest
+    #docker push $DOCKER_REPOSITORY/python-usercode:latest
 }
 
 # build the Dotnet runtime Docker images
@@ -447,10 +475,22 @@ function dk_runtime_run_dotnet () {
         $IMAGE
 }
 
+#
+function k8_login_quay () {
+
+    docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
+    kubectl create secret generic quay-pull-secret \
+        --from-file=.dockerconfigjson=$HOME/.docker/config.json \
+        --type=kubernetes.io/dockerconfigjson
+}
+
 # start the k8 runtime controller
 function k8_controller_start () {
 
-	$HELM upgrade --install runtime-controller user-code-runtime/charts/runtime-controller
+    # alt. helm install runtime-controller runtime-controller/runtime-controller --set ...
+    # not entirely sure which is best - but with latest version we need to be logged into Quay
+    $HELM upgrade --install runtime-controller user-code-runtime/charts/runtime-controller \
+        --set imagePullSecrets[0].name=quay-pull-secret
 }
 
 # stop the k8 runtime controller
@@ -462,8 +502,27 @@ function k8_controller_stop () {
 # start the k8 cluster
 function k8_cluster_start () {
 
-	# BEWARE! runtime controller address and port, etc in member-values.yaml 
-	$HELM install hazelcast hzcharts/hazelcast -f config/member-values.yaml
+    # BEWARE! runtime controller address and port, etc in member-values.yaml 
+
+    # add enterprise licensekey as a parameter
+    # BUT that's not required if we use the hazelcast-enterprise chart (see below)
+#    cat <<EOF > temp/helm-cluster.yaml
+#env:
+#  - name: HZ_LICENSEKEY
+#    value: $HZ_LICENSEKEY
+#EOF
+
+    $HELM repo update
+
+    #$HELM install hazelcast hzcharts/hazelcast \
+    #    -f config/helm-cluster.yaml \
+    #    -f temp/helm-cluster.yaml
+
+    $HELM install hazelcast hzcharts/hazelcast-enterprise \
+        -f config/helm-cluster.yaml \
+        --set hazelcast.licenseKey=$HZ_LICENSEKEY
+
+#    rm temp/helm-cluster.yaml
 }
 
 # stop the k8 cluster
@@ -569,8 +628,8 @@ function submit_viridian_java () {(
     echo $CLASSPATH
 
     java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \
-        $JEX/temp/viridian-secrets/$VIRIDIAN_ID \
-        $JEX/hazelcast-usercode/python/example/usercode # fixme 
+        $JEX/hazelcast-usercode/python/example \
+        $JEX/temp/viridian-secrets/$VIRIDIAN_ID
 )}
 
 # run the demo example
