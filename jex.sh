@@ -32,6 +32,7 @@ init () {
     export DOCKER_NETWORK=jex # the network name for our demo
     export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
     export HELM=helm # name of Helm executable, can be 'mvn' or a full path
+    export SANDBOX_API= # Viridian sandbox API (https://...)
     export SANDBOX_KEY= # Viridian sandbox key (do NOT set it here but in the .user file)
     export SANDBOX_SECRET= # Viridian sandbox secret (same)
     export HZ_LICENSEKEY= # a license key
@@ -67,7 +68,9 @@ cluster:
   address: $CLUSTERADDR
 EOF
 
-    $HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
+    if [ -n "$HELM" ]; then
+        $HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
+    fi
 
     alias jex=./jex.sh
     alias clz=$CLZ
@@ -78,7 +81,9 @@ EOF
     alias dk=docker
     alias kca='kubectl get all'
     alias vrd=$VRD
-    alias vrdlogin="$VRD --api-key $SANDBOX_KEY --api-secret $SANDBOX_SECRET login"
+    alias crd="$CLC viridian"
+    #alias vrdlogin="$VRD --api-key $SANDBOX_KEY --api-secret $SANDBOX_SECRET login"
+    #alias crdlogin="$CLC viridian --api-key $SANDBOX_KEY --api-secret $SANDBOX_SECRET --api-base $SANDBOX_API login"
 
     # Bash on Windows may produce paths such as /c/path/to/lib and Java wants c:\path\to\lib
     # and, in this case, the cygpath command *should* be available - and then we will use it
@@ -87,7 +92,7 @@ EOF
         export CYGPATH=cygpath
     fi
 	
-	export JEX_COMMANDS=$( ${BASH_SOURCE[0]} -commands )
+    export JEX_COMMANDS=$( ${BASH_SOURCE[0]} -commands )
     complete -F _jex jex
 
     echo "configured with:"
@@ -175,6 +180,19 @@ get_secrets () {
     mv $SECRETS/$DIR $SECRETS/$VIRIDIAN_ID
     echo "JEX: retrieved secrets for Viridian cluster $VIRIDIAN_ID"
     echo $VIRIDIAN_ID > $SECRETS/id
+}
+
+
+__login_viridian () { echo "Log into Viridian Sandbox"; }
+login_viridian () {
+    $CLC viridian --api-base $SANDBOX_API --api-key $SANDBOX_KEY --api-secret $SANDBOX_SECRET login
+}
+
+
+__create_viridian_cluster () { echo "Create the usercode.0 Viridian cluster"; }
+create_viridian_cluster () {
+    $VRD create-cluster --name usercode.0 --image-tag stephane.gay --hz-version 5.4.0 --timeout 3m
+    $CLC viridian import-config usercode.0
 }
 
 
@@ -523,8 +541,8 @@ run_dk_runtime_dotnet () {
         $IMAGE
 }
 
-__k8_login_quay () { echo "Log into Quay and create the k8 secret"; }
-k8_login_quay () {
+__login_quay () { echo "Log into Quay and create the k8 secret"; }
+login_quay () {
 
     docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
     kubectl create secret generic quay-pull-secret \
