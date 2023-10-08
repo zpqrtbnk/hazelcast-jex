@@ -258,9 +258,20 @@ logger.usercode.level=DEBUG
 EOF
 
     # this file is not in the distribution
-    cd ../..
-    cp hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION$NLC.jar \
-        distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+    cp $JET/hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION$NLC.jar \
+       $JET/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+)}
+
+
+# build the Jet JobBuilder projet
+__build_jobbuilder () { echo "Build the Jet JobBuilder project"; }
+function build_jobbuilder () {(
+    cd hazelcast-usercode/java/jet-job-builder
+    $MVN clean package
+
+    # merge into EE distribution
+    cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar \
+       $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
 )}
 
 
@@ -412,8 +423,11 @@ _dk_cluster_prepare_image () {
 
     # for some silly reason that JAR is not in the distribution at the moment
     mkdir $DOCKER_SOURCE/lib
-    ls hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION*.jar
+    #ls hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION*.jar
     cp hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION*.jar $DOCKER_SOURCE/lib/
+
+    # nor is that one
+    #cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar $DOCKER_SOURCE/lib/
 
     # copy our own configuration file
     cp config/hazelcast-ee.xml $DOCKER_SOURCE/hazelcast-usercode.xml
