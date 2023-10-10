@@ -16,3 +16,6 @@
 [submodule "clc"]
 	path = clc
 	url = https://github.com/hazelcast/clc
+[submodule "hazelcast-docker"]
+	path = hazelcast-docker
+	url = https://github.com/hazelcast/hazelcast-docker
