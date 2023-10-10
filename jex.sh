@@ -19,66 +19,75 @@
 # TODO: those variables (esp jex.sh.user) should be initialized on each run
 #       init should really only be for things that will not change, ever
 
-__init () { echo "Initialize JEX"; }
-init () {
+# BEWARE! do NOT edit the 'configure' section below, use the jex.sh.user file instead
 
-    # BEWARE! do NOT edit the section below, use the jex.sh.user file instead
+# --- configure ---
+export JEX=/path/to/hazelcast-jex # path to the jex root (where this file lives)
+export CLUSTERNAME=dev
+export CLUSTERADDR=localhost:5701
+export HZVERSION=5.4.0-SNAPSHOT # the version we're building and running
+export LOGGING_LEVEL=DEBUG
+export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
+export DOCKER_NETWORK=jex # the network name for our demo
+export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
+export HELM=helm # name of Helm executable, can be 'helm' or a full path
+export HZ_LICENSEKEY= # an EE license key
+export JOBBUILDER= # whether to include the job builder in builds
+export SANDBOX_API= # Viridian sandbox API (e.g. https://...)
+export SANDBOX_KEY= # Viridian sandbox key
+export SANDBOX_SECRET= # Viridian sandbox secret
+export CLUSTER_NAME= # the viridian cluster name
+export CLUSTER_TAG= # the viridian Quay cluster image tag (eg 'john.doe')
+export HAZELCAST_CONFIG=$JEX/config/hazelcast-cluster.xml # the config to use
+# --- configure ---
 
-    # --- configure environment ---
-    export JEX=/path/to/hazelcast-jex # path to the jex root
-    export CLUSTERNAME=dev
-    export CLUSTERADDR=localhost:5701
-    export HZVERSION=5.4.0-SNAPSHOT # the version we're branching from
-    export HZVERSION_DOCKER=5.3.2 # the base version we'll pull from docker
-    export LOGGING_LEVEL=DEBUG
-    export DOCKER_REPOSITORY=zpqrtbnk # repo name of our temp images
-    export DOCKER_NETWORK=jex # the network name for our demo
-    export MVN=mvn # name of Maven executable, can be 'mvn' or a full path
-    export HELM=helm # name of Helm executable, can be 'mvn' or a full path
-    export SANDBOX_API= # Viridian sandbox API (https://...)
-    export SANDBOX_KEY= # Viridian sandbox key (do NOT set it here but in the .user file)
-    export SANDBOX_SECRET= # Viridian sandbox secret (same)
-    export HZ_LICENSEKEY= # a license key
-    export JOBBUILDER= # whether to include the job builder
-    export CLUSTER_NAME= # the viridian cluster name
-    export CLUSTER_TAG= # the viridian Quay cluster image tag
-    # --- configure environment ---
+# include the jex.sh.user file, if it exists
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+if [ -f "$SCRIPT_DIR/jex.sh.user" ]; then
+    source "$SCRIPT_DIR/jex.sh.user"
+fi
 
-    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-    if [ -f "$SCRIPT_DIR/jex.sh.user" ]; then
-        source "$SCRIPT_DIR/jex.sh.user"
-    fi
+export CLI=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/bin/hz-cli
+export CLZ=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/bin/hz
+export CLC=$JEX/clc/build/clc
+export VRD=$JEX/vrd/build/vrd
 
-    export CLI=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/bin/hz-cli
-    export CLZ=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/bin/hz
-    export CLC="$JEX/clc/build/clc" # --config $JEX/temp/clc-config.yml"
-    export VRD=$JEX/vrd/build/vrd
-    export HAZELCAST_CONFIG=$JEX/config/hazelcast-cluster.xml
+
+# bash can only return from a function OR top-level sourced script
+(return 0 2>/dev/null) && SOURCED=1 || SOURCED=0
+
+# source the script once to initialize it all
+if [ $SOURCED == 1 ]; then
+    _initialize
+elif [ -z "$JEX_INITIALIZED"  ]; then
+    echo "WARN: JEX has not been initialized yet."
+    echo "Initialize JEX by running: 'source jex.sh' once."
+    exit
+fi
+
+
+# source the script to initialize it
+_initialize () {
+
     export PYTHON=python3 # linux
     if [ "$OSTYPE" == "msys" ]; then
         export PYTHON=python # windows
     fi
 
-    #if [ -n "$SANDBOX_KEY" ]; then
-    #    export CLC_VIRIDIAN_API_KEY=$SANDBOX_KEY
-    #    export CLC_VIRIDIAN_API_SECRET=$SANDBOX_SECRET
-    #fi
-
     if [ ! -d $JEX/temp ]; then
         mkdir $JEX/temp
     fi
 
-    cat <<EOF > $JEX/temp/clc-config.yml
-cluster:
-  name: $CLUSTERNAME
-  address: $CLUSTERADDR
-EOF
-
     if [ -n "$HELM" ]; then
-        $HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
+        $HELM repo list | grep -q hzcharts
+        if [ $? == 1 ]; then
+            $HELM repo add hzcharts https://hazelcast-charts.s3.amazonaws.com/
+        else
+            $HELM repo update hzcharts
+        fi
     fi
 
-    alias jex=./jex.sh
+    alias jex=$JEX/jex.sh
     alias clz=$CLZ
     alias clc=$CLC
     alias helm=$HELM
@@ -98,21 +107,13 @@ EOF
         export CYGPATH=cygpath
     fi
 	
-    export JEX_COMMANDS=$( ${BASH_SOURCE[0]} -commands )
-    complete -F _jex jex
+    # see below, all attempts at dynamically doing this have failed so far
+    JEX_COMMANDS=$( ./${BASH_SOURCE[0]} -commands )
+    complete -F _jex_complete jex
 
-    echo "configured with:"
-    echo "    cluster name '$CLUSTERNAME'"
-    echo "    member at '$CLUSTERADDR'"
-    echo "initialized the following aliases:"
-    echo "    jex:  invokes the jex script"
-    echo "    clc:  invokes the clc with the demo config"
-    echo "    clz:  invokes the cluster hz script"
-    echo "    vrd:  invokes vrd"
-    echo "    mvn:  invokes Maven"
-    echo "    helm: invokes Helm"
-    echo "enjoy!"
-    echo ""
+    echo "Initialized. You can now use the 'jex' alias."
+
+    export JEX_INITIALIZED=jex
 }
 
 
@@ -121,30 +122,40 @@ _commands () { echo $( declare -F | cut -d " " -f 3 | grep -ve '^_' | sort ); }
 
 __help () { echo "Display JEX help"; }
 help() {
-	help=""
-	for i in $( echo $JEX_COMMANDS | sort ); do
-	    if [[ $(LC_ALL=C type -t __$i) == function ]]; then
+    declared=$( declare -F | sed 's/declare -f //g' )
+    declared=$( echo $declared | sed 's/ /@/g' )
+	for i in $( _commands ); do
+        if [[ "@$declared@" == *"@__$i@"* ]]; then
 			d=$( __$i )
 		else
 			d="?"
 		fi
-    	i=$( echo $i | sed 's/_/-/g' )
-		help="$help$i\t$d\n"
-	done
-	echo -e $help | column -t -s $'\t'
+        echo -e "${i//_/-}\t$d\n"
+	done | column -t -s $'\t'
 }
 
 
-_jex() {
+_jex_meh () {
+    compgen -W "$1" -- $2 | sed 's/_/-/g'
+}
+
+_jex_complete () {
+    # this runs local to the invoking script
     local cur
     # COMP_WORDS is an array containing all individual words in the current command line
-    # COMP_CWORD is the index of the word contianing the current cursor position
+    # COMP_CWORD is the index of the word containing the current cursor position
     # COMPREPLY is an array variable from which bash reads the possible completions
     cur=${COMP_WORDS[COMP_CWORD]}
-    cur=${cur//-/_} # can use - or _
+    cur=${cur//-/_} # make sure we use _ for completion (but we'll print with -)
     COMPREPLY=()
-    # compgen returns the array of elements from $JEX_COMMANDS matching the current word
+    # compgen returns the array of elements from input matching the current word
     COMPREPLY=( $( compgen -W "$JEX_COMMANDS" -- $cur | sed 's/_/-/g' ) )
+    #COMPREPLY=($(
+        # any attempt at dynamically getting the commands fail
+        # we can run a python script here, fine, but soon as we run a sh script, bang
+        #cmds=$( ${BASH_SOURCE[0]} -commands ) # this fails
+        #compgen -W "$cmds" -- $cur | sed 's/_/-/g'
+    #))
     return 0
 }
 
@@ -196,8 +207,8 @@ enable_journal () {(
 )}
 
 
-__submodule () { echo "List the submodules"; }
-submodule () {
+__list_submodules () { echo "List the submodules"; }
+list_submodules () {
 export meh="hazelcast-usercode"
     result=$(\
     git submodule foreach --quiet '\
@@ -427,7 +438,13 @@ run_dk_sh () {
 __build_dk_cluster_local () { echo "Builder the cluster Docker image for local (requires non-NLC EE)"; }
 build_dk_cluster_local () {
 
-    IMAGE=$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
+    # validate
+    if [ ! -f "hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION.jar" ]; then
+        echo "Could not find the non-NLC enterprise JAR, are you sure you have build the EE project?"
+        return 0
+    fi
+
+    IMAGE=$DOCKER_REPOSITORY/hazelcast:$HZVERSION
 
     _dk_cluster_prepare_image
     ls $JEX/temp/docker-source
@@ -436,18 +453,24 @@ build_dk_cluster_local () {
     docker build \
         -t $IMAGE \
         -f dk8/hazelcast-ee.dockerfile \
-        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        --build-arg="HZVERSION=$HZVERSION" \
         $DOCKER_SOURCE
 
     _dk_cluster_clear_image
 	
-    docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER $DOCKER_REPOSITORY/hazelcast:latest
+    docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION $DOCKER_REPOSITORY/hazelcast:latest
     docker push $DOCKER_REPOSITORY/hazelcast:latest
 }
 
 
 __build_dk_cluster_quay () { echo "Build the cluster Docker image for Quay (requires NLC EE)"; }
 build_dk_cluster_quay () {(
+
+    # validate
+    if [ ! -f "hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION-nlc.jar" ]; then
+        echo "Could not find the NLC enterprise JAR, are you sure you have build the EE-NLC project?"
+        return 0
+    fi
 
     #IMAGE=quay.io/hz_stephane/hazelcast_dev:stephane.gay
     IMAGE=quay.io/hazelcast_cloud/hazelcast-dev:stephane.gay
@@ -459,7 +482,7 @@ build_dk_cluster_quay () {(
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
         -t $IMAGE \
         -f dk8/hazelcast-ee.dockerfile \
-        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        --build-arg="HZVERSION=$HZVERSION" \
         $DOCKER_SOURCE
 
     _dk_cluster_clear_image
@@ -505,7 +528,7 @@ _dk_cluster_buildx_image () {
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
         -t $1 \
         -f dk8/hazelcast-ee.dockerfile \
-        --build-arg="HZVERSION=$HZVERSION_DOCKER" \
+        --build-arg="HZVERSION=$HZVERSION" \
         $DOCKER_SOURCE
 }
 
@@ -583,7 +606,7 @@ run_dk_cluster () {
 		-e HZ_CLUSTERNAME=dev \
 		-e HZ_RUNTIME_CONTROLLER_ADDRESS=10.106.74.139 \
 		-e HZ_RUNTIME_CONTROLLER_PORT=50051 \
-		$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
+		$DOCKER_REPOSITORY/hazelcast:$HZVERSION
 }
 
 
@@ -655,27 +678,13 @@ restart_k8_cluster() {
 __start_k8_cluster () { echo "Start the k8 cluster"; }
 start_k8_cluster () {
 
-    # BEWARE! runtime controller address and port, etc in member-values.yaml 
-
-    # add enterprise licensekey as a parameter
-    # BUT that's not required if we use the hazelcast-enterprise chart (see below)
-#    cat <<EOF > temp/helm-cluster.yaml
-#env:
-#  - name: HZ_LICENSEKEY
-#    value: $HZ_LICENSEKEY
-#EOF
+    # BEWARE! runtime controller address and port, etc in helm-ckyster.yaml 
 
     $HELM repo update
-
-    #$HELM install hazelcast hzcharts/hazelcast \
-    #    -f config/helm-cluster.yaml \
-    #    -f temp/helm-cluster.yaml
 
     $HELM install hazelcast hzcharts/hazelcast-enterprise \
         -f config/helm-cluster.yaml \
         --set hazelcast.licenseKey=$HZ_LICENSEKEY
-
-#    rm temp/helm-cluster.yaml
 }
 
 
@@ -806,16 +815,29 @@ run_test_grpc () {(
 CMDS=$1
 
 if [ -z "$CMDS" ]; then
-	echo "Uh, what am I supposed to do?"
-	exit
+    if [ $SOURCED == 1 ]; then
+        return
+    else
+    	echo "Uh, what am I supposed to do?"
+        echo "Hint: try 'jex help' to list commands, or tab-completion"
+    	exit
+    fi
 fi
 
 shift
 for cmd in $(IFS=,;echo $CMDS); do
     cmd=${cmd//-/_}
-	if [ "$cmd" != "_commands" ]; then
-		echo "JEX: $cmd $@"
-	fi
-    eval $cmd $@
-    if [ $? -ne 0 ]; then break; fi
+	#if [ "$cmd" != "_commands" ]; then
+	#	echo "JEX: $cmd $@"
+	#fi
+    declare -F $cmd >/dev/null
+    if [ $? == 0 ]; then
+        eval $cmd $@
+        if [ $? -ne 0 ]; then break; fi
+    else
+        echo "Not a command: $cmd"
+        echo "Hint: try 'jex help' to list commands, or tab-completion"
+        break
+    fi
 done
+echo ""
