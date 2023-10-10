@@ -16,6 +16,9 @@
 # forward ports: kc port-forward --namespace default runtime-controller-68cc497fcb-bk56w 50051:50051
 # shell into a k8 pod: kc exec -it hazelcast-0 -- /bin/bash
 
+# TODO: those variables (esp jex.sh.user) should be initialized on each run
+#       init should really only be for things that will not change, ever
+
 __init () { echo "Initialize JEX"; }
 init () {
 
@@ -36,6 +39,9 @@ init () {
     export SANDBOX_KEY= # Viridian sandbox key (do NOT set it here but in the .user file)
     export SANDBOX_SECRET= # Viridian sandbox secret (same)
     export HZ_LICENSEKEY= # a license key
+    export JOBBUILDER= # whether to include the job builder
+    export CLUSTER_NAME= # the viridian cluster name
+    export CLUSTER_TAG= # the viridian Quay cluster image tag
     # --- configure environment ---
 
     SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -183,6 +189,30 @@ get_secrets () {
 }
 
 
+__enable_journal () { echo "Enables journal map via dynamic configuration (wip)"; }
+enable_journal () {(
+    cd jex-dotnet/dotnet-enable-journal
+    dotnet run -- ~/.hazelcast/configs/usercode.0/config.json
+)}
+
+
+__submodule () { echo "List the submodules"; }
+submodule () {
+export meh="hazelcast-usercode"
+    result=$(\
+    git submodule foreach --quiet '\
+        sha0=$( git -C .. ls-tree HEAD | grep -E "$sm_path\$" | cut -d \  -f 3 | cut -c-7 ) ;\
+        sha1=$( git rev-parse HEAD | cut -c-7 ) ;\
+        dirty="OK" ;\
+        if [ "$sha0" != "$sha1" ]; then dirty="WARN"; fi ;\
+        echo -n "$sm_path $sha0 $sha1 $dirty--NL--" ;\
+    ')
+    text="SUBMODULE TARGET CURRENT STATE--NL--$result"
+    text=$(echo $text | sed 's/--NL--/\\n/g')
+    echo -e $text | column -t -s ' '
+}
+
+
 __login_viridian () { echo "Log into Viridian Sandbox"; }
 login_viridian () {
     $CLC viridian --api-base $SANDBOX_API --api-key $SANDBOX_KEY --api-secret $SANDBOX_SECRET login
@@ -191,8 +221,8 @@ login_viridian () {
 
 __create_viridian_cluster () { echo "Create the usercode.0 Viridian cluster"; }
 create_viridian_cluster () {
-    $VRD create-cluster --name usercode.0 --image-tag stephane.gay --hz-version 5.4.0 --timeout 3m
-    $CLC viridian import-config usercode.0
+    $VRD create-cluster --name $CLUSTER_NAME --image-tag $CLUSTER_TAG --hz-version 5.4.0 --timeout 3m
+    $CLC viridian import-config $CLUSTER_NAME
 }
 
 
@@ -212,6 +242,24 @@ build_clc () {(
     fi
     echo "go build"
     go build -tags base,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc ./cmd/clc
+)}
+
+
+__build_dk_controller () { echo "Build the Runtime Controller project and Docker image"; }
+build_dk_controller () {(
+    cd user-code-runtime
+
+    CHART=charts/runtime-controller/Chart.yaml
+    VALUES=charts/runtime-controller/values.yaml
+
+    REPOSITORY=$($PYTHON scripts/repository.py $VALUES)
+    VERSION=$($PYTHON scripts/version.py $CHART)
+
+    # the Quay build - NOT what we want here!
+    #docker build -t $REPOSITORY:$VERSION .
+
+    # local build
+    docker build -t $DOCKER_REPOSITORY/runtime-controller:$VERSION .
 )}
 
 
@@ -258,8 +306,8 @@ logger.usercode.level=DEBUG
 EOF
 
     # this file is not in the distribution
-    cp $JET/hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION$NLC.jar \
-       $JET/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+    cp $JEX/hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION$NLC.jar \
+       $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
 )}
 
 
@@ -267,10 +315,22 @@ EOF
 __build_jobbuilder () { echo "Build the Jet JobBuilder project"; }
 function build_jobbuilder () {(
     cd hazelcast-usercode/java/jet-job-builder
-    $MVN clean package
+    $MVN clean install
 
     # merge into EE distribution
     cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar \
+       $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+)}
+
+
+# build the UserCode JobBuilder project
+__build_jobbuilder_usercode () { echo "Build the UserCode JobBuilder project"; }
+build_jobbuilder_usercode () {(
+    cd hazelcast-usercode/java/usercode-job-builder
+    $MVN clean install
+
+    # merge into EE distribution
+    cp $JEX/hazelcast-usercode/java/usercode-job-builder/target/hazelcast-usercode-jobbuilder-$HZVERSION.jar \
        $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
 )}
 
@@ -364,13 +424,13 @@ run_dk_sh () {
 }
 
 
-# builds the Hazelcast cluster (OS+EE) Docker single-platform image and push to registry
-# (assuming that the OS+EE projects have been built already)
-_OBSOLETE_dk_cluster_build_local () {
+__build_dk_cluster_local () { echo "Builder the cluster Docker image for local (requires non-NLC EE)"; }
+build_dk_cluster_local () {
 
     IMAGE=$DOCKER_REPOSITORY/hazelcast:$HZVERSION_DOCKER
 
     _dk_cluster_prepare_image
+    ls $JEX/temp/docker-source
 
     # build
     docker build \
@@ -427,7 +487,10 @@ _dk_cluster_prepare_image () {
     cp hazelcast-enterprise/hazelcast-enterprise-usercode/target/hazelcast-enterprise-usercode-$HZVERSION*.jar $DOCKER_SOURCE/lib/
 
     # nor is that one
-    #cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar $DOCKER_SOURCE/lib/
+    if [ -n "$JOBBUILDER" ]; then
+        cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar $DOCKER_SOURCE/lib/
+        cp $JEX/hazelcast-usercode/java/usercode-job-builder/target/hazelcast-usercode-jobbuilder-$HZVERSION.jar $DOCKER_SOURCE/lib/
+    fi
 
     # copy our own configuration file
     cp config/hazelcast-ee.xml $DOCKER_SOURCE/hazelcast-usercode.xml
@@ -582,6 +645,13 @@ stop_k8_controller () {
 }
 
 
+__restart_k8_cluster () { echo "Restart the k8 cluster"; }
+restart_k8_cluster() {
+    stop_k8_cluster
+    start_k8_cluster
+}
+
+
 __start_k8_cluster () { echo "Start the k8 cluster"; }
 start_k8_cluster () {
 
@@ -676,7 +746,7 @@ build_jex_java () {(
 	$MVN clean package
 )
 (
-	cd jex-java/java-pipeline-Viridian
+	cd jex-java/java-pipeline-viridian
 	$MVN clean package
 )}
 
@@ -703,7 +773,8 @@ submit_local_java () {(
 __submit_viridian_java () { echo "Submit job to Viridian sandbox cluster from Java"; }
 submit_viridian_java () {(
 
-    VIRIDIAN_ID=$( cat $JEX/temp/viridian-secrets/id )
+    #VIRIDIAN_ID=$( cat $JEX/temp/viridian-secrets/id )
+    VIRIDIAN_ID=usercode.0
 
     PIPELINE=java-pipeline-viridian
     HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
@@ -713,7 +784,7 @@ submit_viridian_java () {(
 
     java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \
         $JEX/hazelcast-usercode/python/example \
-        $JEX/temp/viridian-secrets/$VIRIDIAN_ID
+        ~/.hazelcast/configs/$VIRIDIAN_ID
 )}
 
 
@@ -721,7 +792,7 @@ __run_example () { echo "Run the .NET example app"; }
 run_example () {(
 
     cd jex-dotnet/dotnet-example
-    dotnet run -- --hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR
+    dotnet run -- #--hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR
 )}
 
 

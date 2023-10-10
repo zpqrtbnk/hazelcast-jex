@@ -1,0 +1,48 @@
+#
+# must submit with
+# clc job submit path/to/job.yml USERCODE=path/to/usercode
+#
+# the SECRETS substitution variable is provided by CLC 
+# (consider adding it to resources automatically too)
+#
+
+job:
+  name: my-job
+  resources:
+    - id: usercode
+      type: DIRECTORY
+      path: "$USERCODE"
+    - id: secrets
+      type: DIRECTORY
+      path: "$SECRETS"
+  pipeline:
+    - source: map-journal
+      map-name: "streamed-map"
+      journal-initial-position: START_FROM_CURRENT
+      timestamp: INGESTION
+
+    # transform using user code
+    - transform: user-code
+
+      image-name: quay.io/hz_stephane/python-usercode-base:latest
+      resources:
+        - usercode
+        - secrets
+
+      # user code runtime parameters
+      #runtime: 
+      #  service:
+      #    container:
+      #      image: zpqrtbnk/python-usercode-base:latest
+      #  transport: 
+      #    grpc:
+      #      port: 5252
+
+      # transform parameters
+      name: python-transform
+      parallel-processors: 1
+      parallel-operations: 1
+      preserve-order: true
+
+    - sink: map
+      map-name: "result-map"

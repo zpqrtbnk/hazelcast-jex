@@ -17,6 +17,10 @@ using System;
 using System.Threading.Tasks;
 using Hazelcast.DistributedObjects;
 using Microsoft.Extensions.Logging;
+using System.Security.Authentication;
+using System.Text.Json;
+using System.IO;
+
 namespace Hazelcast.Demo.Example;
 
 public class Program
@@ -63,31 +67,7 @@ public class Program
 
     private static HazelcastOptions BuildOptions(String[] args)
     {
-        // return new HazelcastOptionsBuilder()
-        //     .With(args)
-        //     .With(o =>
-        //     {
-        //         // Your Viridian cluster name.
-        //         o.ClusterName = "pr-dblpuha6";
-        //         // Your discovery token and url to connect Viridian cluster.
-        //         o.Networking.Cloud.DiscoveryToken = "sRpToloYGAHHbMwmJ1amqV9lRTembAjkXIuWHj66iddvW1O3Ml";
-        //         o.Networking.Cloud.Url = new Uri("https://api.viridian.hazelcast.com");
-        //         // Enable metrics to see on Management Center.
-        //         o.Metrics.Enabled = true;
-        //         // Configure SSL.
-        //         o.Networking.Ssl.Enabled = true;
-        //         o.Networking.Ssl.ValidateCertificateChain = false;
-        //         o.Networking.Ssl.Protocol = SslProtocols.Tls12;
-        //         o.Networking.Ssl.CertificatePath = "viridian-client.pfx";
-        //         o.Networking.Ssl.CertificatePassword = "f804354890e";
-
-        //         // Register Compact serializer of City class.
-        //         //o.Serialization.Compact.AddSerializer(new CitySerializer());
-        //     })
-        //     .WithConsoleLogger()
-        //     .Build();
-
-        return new HazelcastOptionsBuilder()
+        var optionsBuilder = new HazelcastOptionsBuilder()
             .With(args)
             .With(o => {
                 // must have a jet-enabled cluster with the job running
@@ -109,7 +89,32 @@ public class Program
                 //compact.SetTypeName<SomeThing>("some-thing");
                 //compact.SetTypeName<OtherThing>("other-thing");
 
-            }).WithConsoleLogger(LogLevel.Debug)
+            });
+
+        var viridian = "usercode.0";
+        if (viridian != "") {
+            var jsonText = File.ReadAllText($"/home/sgay/.hazelcast/configs/{viridian}/config.json");
+            var secrets = JsonSerializer.Deserialize<JsonElement>(jsonText);
+            var clusterSecrets = secrets.GetProperty("cluster");
+            var sslSecrets = secrets.GetProperty("ssl");
+            optionsBuilder = optionsBuilder
+            .With(config =>
+                {
+                    config.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
+                    config.ClusterName = clusterSecrets.GetProperty("name").GetString();
+                    config.Networking.Cloud.DiscoveryToken = clusterSecrets.GetProperty("discovery-token").GetString();
+                    config.Networking.Cloud.Url = new Uri(clusterSecrets.GetProperty("api-base").GetString());
+                    config.Metrics.Enabled = true;
+                    config.Networking.Ssl.Enabled = true;
+                    config.Networking.Ssl.ValidateCertificateChain = false;
+                    config.Networking.Ssl.Protocol = SslProtocols.Tls12;
+                    config.Networking.Ssl.CertificatePath = "/home/sgay/.hazelcast/configs/usercode.0/client.pfx";
+                    config.Networking.Ssl.CertificatePassword = sslSecrets.GetProperty("key-password").GetString();
+                });
+        }
+
+        return optionsBuilder
+            .WithConsoleLogger(LogLevel.Debug)
             .Build();
 
    }
