@@ -19,3 +19,6 @@
 [submodule "hazelcast-docker"]
 	path = hazelcast-docker
 	url = https://github.com/hazelcast/hazelcast-docker
+[submodule "vrd"]
+	path = vrd
+	url = https://github.com/hazelcast/vrd
