@@ -577,7 +577,7 @@ build_dk_runtime_dotnet () {
     docker push $DOCKER_REPOSITORY/dotnet-usercode:latest 
 }
 
-# initialize Docker (custom network...)
+__dk_initialize () { echo "Initialize Docker (network, buildx...)"; }
 dk_initialize () {
 
     if [ -n "$DOCKER_NETWORK" ]; then
