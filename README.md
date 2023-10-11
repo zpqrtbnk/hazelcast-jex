@@ -73,6 +73,7 @@ Found: example-key-20 = OtherThing(Value=__20__)
 ### Viridian Demo
 
 ```
+jex dk-initialize
 jex build-cluster-os
 jex build-cluster-ee-nlc
 jex login-quay
@@ -107,6 +108,7 @@ cluster:
 ```
 
 ```
+jex dk-initialize
 jex build-cluster-os
 jex build-cluster-ee
 jex build-dk-cluster-local
