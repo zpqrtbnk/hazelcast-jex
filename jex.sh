@@ -9,6 +9,11 @@
 #    register the 'jex' alias
 # 3. now you can run 'jex help' to list available commands
 
+if [ -z "$BASH_VERSION" ]; then
+    echo "ERR: this script must run under bash"
+    return 0
+fi
+
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 export JEX=$SCRIPT_DIR
 
@@ -834,9 +839,6 @@ fi
 shift
 for cmd in $(IFS=,;echo $CMDS); do
     cmd=${cmd//-/_}
-	#if [ "$cmd" != "_commands" ]; then
-	#	echo "JEX: $cmd $@"
-	#fi
     declare -F $cmd >/dev/null
     if [ $? == 0 ]; then
         eval $cmd $@
@@ -848,3 +850,11 @@ for cmd in $(IFS=,;echo $CMDS); do
     fi
 done
 echo ""
+
+# APPENDIX: NOTES
+
+# add '--entrypoint /bin/bash' to override entrypoint and inspect the content of a container
+# forward ports: kc port-forward --namespace default runtime-controller-68cc497fcb-bk56w 50051:50051
+# shell into a k8 pod: kc exec -it hazelcast-0 -- /bin/bash
+
+# eof
