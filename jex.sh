@@ -222,13 +222,14 @@ _classpath () {
 __enable_journal () { echo "Enables journal map via dynamic configuration (wip)"; }
 enable_journal () {(
     cd jex-dotnet/dotnet-enable-journal
-    dotnet run -- ~/.hazelcast/configs/usercode.0/config.json
+    CONFIG_ID=$1
+    CLCHOME=$($CLC home)
+    dotnet run -- $CLCHOME/configs/$CONFIG_ID
 )}
 
 
 __list_submodules () { echo "List the submodules"; }
 list_submodules () {
-export meh="hazelcast-usercode"
     result=$(\
     git submodule foreach --quiet '\
         sha0=$( git -C .. ls-tree HEAD | grep -E "$sm_path\$" | cut -d \  -f 3 | cut -c-7 ) ;\
@@ -251,9 +252,13 @@ login_viridian () {
 
 __create_viridian_cluster () { echo "Create the Viridian cluster"; }
 create_viridian_cluster () {
-    #$VRD create-cluster --name $CLUSTER_NAME --image-tag $CLUSTER_TAG --hz-version 5.4.0 --timeout 3m
-    $CLC viridian create-cluster --name $CLUSTER_NAME --image-tag $CLUSTER_TAG --hz-version 5.4.0 --timeout 3m
-    $CLC viridian import-config $CLUSTER_NAME
+    NAME=$1
+    if [ -z "$NAME" ]; then
+        echo "missing cluster name"
+        return
+    fi
+    $VRD create-cluster --name $NAME --image-tag $CLUSTER_TAG --hz-version 5.4.0 --timeout 3m
+    $CLC viridian import-config $NAME
 }
 
 
@@ -273,6 +278,28 @@ build_clc () {(
     fi
     echo "go build"
     go build -tags base,std,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/clc ./cmd/clc
+)}
+
+
+
+__build_vrd () { echo "Build the VRD project"; }
+build_vrd () {(
+    cd vrd
+    CLC_VERSION=v0.0.0-CUSTOMBUILD
+    GIT_COMMIT=$(git rev-parse HEAD 2> /dev/null || echo unknown)
+    LDFLAGS="-s -w"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/clc/cmd.MainCommandShortHelp=Viridian Deploy Tool'"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.GitCommit=$GIT_COMMIT'"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal.Version=$CLC_VERSION '"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientType=CLC'"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-go-client/internal.ClientVersion=$CLC_VERSION'"
+    LDFLAGS="$LDFLAGS -X 'github.com/hazelcast/hazelcast-commandline-client/internal/viridian.EnableInternalOps=yes'"
+    if [ "$OSTYPE" == "msys" ]; then
+        echo "go-winres make"
+        go-winres make --in extras/windows/winres.json --product-version=$CLC_VERSION --file-version=$CLC_VERSION --out cmd/clc/rsrc
+    fi
+    echo "go build"
+    CGO_ENABLED=0 go build -tags base,viridian,hazelcastinternal,hazelcastinternaltest -ldflags "$LDFLAGS" -o build/vrd ./cmd/clc
 )}
 
 
