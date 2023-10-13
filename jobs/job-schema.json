@@ -1,0 +1,143 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$ref": "#/definitions/Document",
+
+
+    
+    "definitions": {
+        "Document": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "$schema": {
+                    "type": "string"
+                },
+                "job": {
+                    "$ref": "#/definitions/Job" 
+                }
+            },
+            "required": [ "job" ]
+        },
+        "Job": {
+            "type": "object",
+              "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "pipeline": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PipelineSinglePath"
+                        },
+                        {
+                            "$ref": "#/definitions/PipelineMultiPaths"
+                        }
+                    ]
+                },
+                "resources": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/definitions/Resource" }
+                }
+            },
+            "required": [
+                "name",
+                "pipeline"
+            ],
+            "title": "Job"
+        },
+
+
+
+        "Resource": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": "string" },
+                "path": { "type": "string" },
+                "type" : { "enum": [ "FILE", "DIRECTORY" ] }
+            },
+            "required": [ "id", "path", "type" ]
+        },
+
+
+
+        "PipelineSinglePath": { 
+            "type": "array",
+            "minItems": 1,
+            "items": { 
+                "anyOf": [
+                    { "$ref": "#/definitions/SourceMap" },
+                    { "$ref": "#/definitions/TransformIdentity" },
+                    { "$ref": "#/definitions/TransformMagic" },
+                    { "$ref": "#/definitions/SinkMap" }
+                ]
+            }          
+        },
+        "PipelineMultiPath" : {
+            "type": "array",
+            "minItems": 1,
+            "items": { 
+                "anyOf": [
+                    { "$ref": "#/definitions/Reference" },
+                    { "$ref": "#/definitions/SourceMap" },
+                    { "$ref": "#/definitions/TransformIdentity" },
+                    { "$ref": "#/definitions/TransformMagic" },
+                    { "$ref": "#/definitions/SinkMap" }
+                ]
+            }            
+        },
+        "PipelineMultiPaths": { 
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/definitions/PipelineMultiPath" }
+        },
+
+
+
+        "Reference": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "ref" ],
+            "properties": {
+                "ref": { "type":"string" }
+                }
+        },
+        "SourceMap": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "source" ],
+            "properties": {
+                "source": { "enum": [ "map" ] },
+                "map-name": { "type": "string"}
+            }
+        },
+        "TransformIdentity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "transform" ],
+            "properties": {
+                "transform": { "enum": [ "identity" ] }
+            }
+        },
+        "TransformMagic": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "transform" ],
+            "properties": {
+                "transform": { "enum": [ "magic" ] },
+                "trick-name" : { "type": "string" }
+            }
+        },
+        "SinkMap": {
+            "type":"object",
+            "additionalProperties": false,
+            "required": [ "sink" ],
+            "properties": {
+                "sink": { "enum": [ "map" ] },
+                "map-name": { "type": "string"}
+            }
+        }
+    }
+}

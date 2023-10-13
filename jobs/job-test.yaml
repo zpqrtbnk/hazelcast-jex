@@ -1,0 +1,27 @@
+# this specifies the schema for the Visual Studio Code YAML extension from RedHat
+# see https://github.com/redhat-developer/vscode-yaml for details and documentation
+# yaml-language-server: $schema=job-schema.json
+
+# note: our schema is, for the time being, very crude
+
+job:
+  name: my-job
+  snapshot: meh
+  resources:
+    - id: usercode
+      path: path/to/usercode
+      type: FILE
+  pipeline:
+    - - source: map
+        map-name: my-map
+      - sink: map
+        map-name: other-map
+    - - ref: bah
+      - source: map
+        map-name: yolo
+      - transform: identity
+      - transform: magic
+        trick-name: wouupi
+        dangdang : 3
+      - sink: there
+        map-name: nowhere

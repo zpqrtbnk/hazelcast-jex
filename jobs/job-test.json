@@ -1,0 +1,15 @@
+{
+    "$schema": "file:///Users/sgay/Code/hazelcast-jex/jobs/job-schema.json",
+    "job": {
+        "name": "my-job",
+        "pipeline": [
+            [
+                { "source": "map", "map-name": "my-map"}
+            ],
+            [
+                { "ref": "whatever" },
+                { "sink": "map", "map-name": "other-map"}
+            ]
+        ]
+    }
+}
