@@ -101,13 +101,14 @@ _initialize () {
         export CYGPATH=cygpath
     fi
 	
+    # before gettings commands!
+    export JEX_INITIALIZED=jex
+
     # see below, all attempts at dynamically doing this have failed so far
     JEX_COMMANDS=$( ./${BASH_SOURCE[0]} -commands )
     complete -F _jex_complete jex
 
     echo "Initialized. You can now use the 'jex' alias."
-
-    export JEX_INITIALIZED=jex
 }
 
 
@@ -763,49 +764,27 @@ function _OBSOLETE_submit_dotnet () {
 
 __build_jex_java () { echo "Build all the jex Java projects"; }
 build_jex_java () {(
-	cd jex-java/java-pipeline
-	$MVN -nsu clean package
-)
-(
-	cd jex-java/java-pipeline-viridian
+	cd jex-java/java-submit
 	$MVN -nsu clean package
 )}
 
 
-__submit_local_java () { echo "Submit job to local cluster from Java"; }
-submit_local_java () {(
+__submit_java () { echo "Submit job to cluster from Java"; }
+submit_java () {(
 
-    PIPELINE=java-pipeline
+    CONFIG_ID=$1
+    if [ -z "$CONFIG_ID" ]; then
+        echo "err: missing config id"
+        return
+    fi
     HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
-    TARGET=$JEX/jex-java/$PIPELINE/target
+    TARGET=$JEX/jex-java/submit-java/target
     CLASSPATH="$TARGET/python-jet-usercode-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
-    echo $CLASSPATH
-
-    USERCODE_PATH=$JEX/hazelcast-usercode/python/example
-    SECRETS_PATH="NULL" # $JEX/temp/viridian-secrets/$VIRIDIAN_ID
-
-    # args are: usercode-path, secrets-path (or NULL)
-    java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \
-        $USERCODE_PATH \
-        $SECRETS_PATH
-)}
-
-
-__submit_viridian_java () { echo "Submit job to Viridian sandbox cluster from Java"; }
-submit_viridian_java () {(
-
-    #VIRIDIAN_ID=$( cat $JEX/temp/viridian-secrets/id )
-    VIRIDIAN_ID=usercode.0
-
-    PIPELINE=java-pipeline-viridian
-    HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
-    TARGET=$JEX/jex-java/$PIPELINE/target
-    CLASSPATH="$TARGET/python-jet-usercode-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
-    echo $CLASSPATH
+    CLCHOME=$($CLC home)
 
     java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \
-        $JEX/hazelcast-usercode/python/example \
-        ~/.hazelcast/configs/$VIRIDIAN_ID
+        $CLCHOME/configs/$CONFIG_ID \
+        $JEX/hazelcast-usercode/python/example
 )}
 
 

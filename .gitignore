@@ -20,7 +20,4 @@ $RECYCLE.BIN/
 .github/secrets
 
 /**/publish/
-/jex-java/java-pipeline/target/
-/jex-java/java-pipeline-viridian/target/
-/jex-java/java-pipeline-viridian/tls/
-/jex-java/java-pipeline-viridian/**/resources/
+/jex-java/java-submit/target/
