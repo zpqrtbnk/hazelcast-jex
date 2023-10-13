@@ -791,8 +791,10 @@ submit_java () {(
 __run_example () { echo "Run the .NET example app"; }
 run_example () {(
 
+    CONFIG_ID=$1
+    CLCHOME=$($CLC home)
     cd jex-dotnet/dotnet-example
-    dotnet run -- #--hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR
+    dotnet run -- $CLCHOME/configs/$CONFIG_ID #--hazelcast:clusterName=$CLUSTERNAME --hazelcast:networking:addresses:0=$CLUSTERADDR
 )}
 
 

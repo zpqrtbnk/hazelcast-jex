@@ -20,6 +20,8 @@ using Microsoft.Extensions.Logging;
 using System.Security.Authentication;
 using System.Text.Json;
 using System.IO;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Hazelcast.Demo.Example;
 
@@ -27,9 +29,104 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
+        if (args.Length != 1) {
+            Console.WriteLine("usage: example <config>");
+            return;
+        }
+
+        var secretsPath = args[0];
+        if (!Path.IsPathRooted(secretsPath))
+        {
+            Console.WriteLine("err: secrets path is not absolute.");
+            return;
+        }
+        if (!Directory.Exists(secretsPath))
+        {
+            Console.WriteLine($"err: secrets directory '{secretsPath}' not found.");
+            return;
+        }
+
+        var configJsonPath = Path.Combine(secretsPath, "config.json");
+        if (!File.Exists(configJsonPath))
+        {
+            Console.WriteLine($"err: config file '{configJsonPath}' not found.");
+            return;
+        }
+
+        var configYamlPath = Path.Combine(secretsPath, "config.yaml");
+        if (!File.Exists(configYamlPath))
+        {
+            Console.WriteLine($"err: config file '{configYamlPath}' not found.");
+        }
+
+        JsonObject config;
+        await using (var configJsonStream = File.OpenRead(configJsonPath))
+        {
+            config = JsonNode.Parse(configJsonStream)?.AsObject() ?? throw new Exception("meh?");
+        }
+
+        var clusterElement = config["cluster"].AsObject();
+        var clusterName = clusterElement["name"].ToString();
+        var clusterAddress = clusterElement.ContainsKey("address")
+            ? clusterElement["address"].ToString() 
+            : null;
+        var isCloud = false;
+        string apiBase = null, token = null;
+        if (clusterElement.ContainsKey("discovery-token"))
+        {
+            isCloud = true;
+            token = clusterElement["discovery-token"].ToString();
+            apiBase = clusterElement["api-base"].ToString();
+        }
+
+        var useSsl = false;
+        string password = null, caPath = null, certPath = null, keyPath = null;
+        if (config.ContainsKey("ssl"))
+        {
+            useSsl = true;
+            var sslElement = config["ssl"];
+            password = sslElement["password"].ToString();
+            caPath = sslElement["ca-path"].ToString();
+            certPath = sslElement["cert-path"].ToString();
+            keyPath = sslElement["key-path"].ToString();
+        }
+
         Console.WriteLine("Connect to cluster...");
 
-        var options = BuildOptions(args);
+        var options = new HazelcastOptionsBuilder()
+            .With(o =>
+            {
+                // add serializers so that we have the polyglot type name
+                var compact = o.Serialization.Compact;
+                compact.AddSerializer(new SomeThingSerializer());
+                compact.AddSerializer(new OtherThingSerializer());
+            })
+            .With(o =>
+            {
+                o.ClusterName = clusterName;
+                o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
+
+                if (useSsl)
+                {
+                    var ssl = o.Networking.Ssl;
+                    ssl.Enabled = true;
+                    ssl.CertificatePath = certPath;
+                    ssl.CertificatePassword = password;
+                }
+
+                if (isCloud)
+                {
+                    var cloud = o.Networking.Cloud;
+                    cloud.DiscoveryToken = token;
+                    cloud.Url = new Uri(apiBase);
+                }
+                else
+                {
+                    o.Networking.Addresses.Add(clusterAddress);
+                }
+            })
+            .Build();
+
         await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
         
         Console.WriteLine("Connected");
@@ -37,16 +134,6 @@ public class Program
         await using var sourceMap = await client.GetMapAsync<string, SomeThing>("streamed-map");
         await using var resultMap = await client.GetMapAsync<string, OtherThing>("result-map");
 
-        // DEBUG
-        //await DumpMap(sourceMap);
-        //await DumpMap(resultMap);
-        //Console.WriteLine(SchemaBuilder.ReportSchemas(client));
-
-        // first time the example runs on the cluster, the client does not know about the schema
-        // for OtherThing, and *neither* does the cluster = fail. setting a dummy value generates
-        // the schema on the client
-        await resultMap.SetAsync("dummy", new OtherThing());
-        
         // insert a value in source
         var random = Random.Shared.Next(100);
         var key = "example-key-" + random;
@@ -63,66 +150,5 @@ public class Program
             await Task.Delay(1000);
 
         Console.WriteLine(maxAttempts == 0 ? "Failed" : $"Found: {key} = {result}");
-    }
-
-    private static HazelcastOptions BuildOptions(String[] args)
-    {
-        var optionsBuilder = new HazelcastOptionsBuilder()
-            .With(args)
-            .With(o => {
-                // must have a jet-enabled cluster with the job running
-                // we'll provide these via command-line arguments
-                //o.ClusterName = "dev";
-                //o.Networking.Addresses.Add("127.0.0.1:5701");
-                //o.Networking.Addresses.Add("192.168.1.49:5701");
-
-                o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
-
-                var compact = o.Serialization.Compact;
-
-                // add serializers so that we have the polyglot type name
-                compact.AddSerializer(new SomeThingSerializer());
-                compact.AddSerializer(new OtherThingSerializer());
-
-                // BUT with this only, we have 'Value' fields instead of 'value'
-                // use the reflection serializer BUT use the polyglot type name
-                //compact.SetTypeName<SomeThing>("some-thing");
-                //compact.SetTypeName<OtherThing>("other-thing");
-
-            });
-
-        var viridian = "usercode.0";
-        if (viridian != "") {
-            var jsonText = File.ReadAllText($"/home/sgay/.hazelcast/configs/{viridian}/config.json");
-            var secrets = JsonSerializer.Deserialize<JsonElement>(jsonText);
-            var clusterSecrets = secrets.GetProperty("cluster");
-            var sslSecrets = secrets.GetProperty("ssl");
-            optionsBuilder = optionsBuilder
-            .With(config =>
-                {
-                    config.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
-                    config.ClusterName = clusterSecrets.GetProperty("name").GetString();
-                    config.Networking.Cloud.DiscoveryToken = clusterSecrets.GetProperty("discovery-token").GetString();
-                    config.Networking.Cloud.Url = new Uri(clusterSecrets.GetProperty("api-base").GetString());
-                    config.Metrics.Enabled = true;
-                    config.Networking.Ssl.Enabled = true;
-                    config.Networking.Ssl.ValidateCertificateChain = false;
-                    config.Networking.Ssl.Protocol = SslProtocols.Tls12;
-                    config.Networking.Ssl.CertificatePath = "/home/sgay/.hazelcast/configs/usercode.0/client.pfx";
-                    config.Networking.Ssl.CertificatePassword = sslSecrets.GetProperty("key-password").GetString();
-                });
-        }
-
-        return optionsBuilder
-            .WithConsoleLogger(LogLevel.Debug)
-            .Build();
-
-   }
-
-    private static async Task DumpMap<TKey, TResult>(IHMap<TKey, TResult> map)
-    {
-        Console.WriteLine($"Entries in '{map.Name}' map:");
-        await foreach (var entry in map)
-            Console.WriteLine($"  {entry.Key}: {entry.Value}");
     }
 }
