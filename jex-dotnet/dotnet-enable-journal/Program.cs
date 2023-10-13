@@ -11,16 +11,14 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        var optionsBuilder = new HazelcastOptionsBuilder()
-            .With(args);
-
         if (args.Length != 1)
         {
             Console.WriteLine("usage: enable <config>");
             return;
         }
 
-        var options = optionsBuilder
+        var options = new HazelcastOptionsBuilder()
+           //.With(args)
            .WithSecrets(args[0])
            .Build();
         await using var client = await HazelcastClientFactory.StartNewClientAsync(options);

@@ -34,63 +34,6 @@ public class Program
             return;
         }
 
-        var secretsPath = args[0];
-        if (!Path.IsPathRooted(secretsPath))
-        {
-            Console.WriteLine("err: secrets path is not absolute.");
-            return;
-        }
-        if (!Directory.Exists(secretsPath))
-        {
-            Console.WriteLine($"err: secrets directory '{secretsPath}' not found.");
-            return;
-        }
-
-        var configJsonPath = Path.Combine(secretsPath, "config.json");
-        if (!File.Exists(configJsonPath))
-        {
-            Console.WriteLine($"err: config file '{configJsonPath}' not found.");
-            return;
-        }
-
-        var configYamlPath = Path.Combine(secretsPath, "config.yaml");
-        if (!File.Exists(configYamlPath))
-        {
-            Console.WriteLine($"err: config file '{configYamlPath}' not found.");
-        }
-
-        JsonObject config;
-        await using (var configJsonStream = File.OpenRead(configJsonPath))
-        {
-            config = JsonNode.Parse(configJsonStream)?.AsObject() ?? throw new Exception("meh?");
-        }
-
-        var clusterElement = config["cluster"].AsObject();
-        var clusterName = clusterElement["name"].ToString();
-        var clusterAddress = clusterElement.ContainsKey("address")
-            ? clusterElement["address"].ToString() 
-            : null;
-        var isCloud = false;
-        string apiBase = null, token = null;
-        if (clusterElement.ContainsKey("discovery-token"))
-        {
-            isCloud = true;
-            token = clusterElement["discovery-token"].ToString();
-            apiBase = clusterElement["api-base"].ToString();
-        }
-
-        var useSsl = false;
-        string password = null, caPath = null, certPath = null, keyPath = null;
-        if (config.ContainsKey("ssl"))
-        {
-            useSsl = true;
-            var sslElement = config["ssl"];
-            password = sslElement["password"].ToString();
-            caPath = sslElement["ca-path"].ToString();
-            certPath = sslElement["cert-path"].ToString();
-            keyPath = sslElement["key-path"].ToString();
-        }
-
         Console.WriteLine("Connect to cluster...");
 
         var options = new HazelcastOptionsBuilder()

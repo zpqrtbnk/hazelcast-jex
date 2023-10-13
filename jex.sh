@@ -810,8 +810,8 @@ submit_java () {(
         return
     fi
     HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
-    TARGET=$JEX/jex-java/submit-java/target
-    CLASSPATH="$TARGET/python-jet-usercode-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
+    TARGET=$JEX/jex-java/java-submit/target
+    CLASSPATH="$TARGET/java-submit-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
     CLCHOME=$($CLC home)
 
     java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \

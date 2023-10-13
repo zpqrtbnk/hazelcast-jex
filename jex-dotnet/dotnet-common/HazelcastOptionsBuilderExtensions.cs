@@ -97,7 +97,7 @@ public static class HazelcastOptionsBuilderExtensions
         {
             useSsl = true;
             var sslElement = config["ssl"];
-            password = sslElement["password"].ToString();
+            password = sslElement["key-password"].ToString();
             caPath = sslElement["ca-path"].ToString();
             certPath = sslElement["cert-path"].ToString();
             keyPath = sslElement["key-path"].ToString();
@@ -112,7 +112,9 @@ public static class HazelcastOptionsBuilderExtensions
             {
                 var ssl = o.Networking.Ssl;
                 ssl.Enabled = true;
-                ssl.CertificatePath = certPath;
+                ssl.ValidateCertificateChain = false;
+                //ssl.Protocol = SslProtocols.Tls12;
+                ssl.CertificatePath = Path.Combine(secretsPath, "client.pfx");
                 ssl.CertificatePassword = password;
             }
 

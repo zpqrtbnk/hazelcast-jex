@@ -88,7 +88,9 @@ public class SubmitPythonJetUserCode {
         JSONObject secrets = new JSONObject(json);
         JSONObject clusterSecrets = (JSONObject) secrets.get("cluster");
         String clusterName = (String) clusterSecrets.get("name");
-        String clusterAddress = (String) clusterSecrets.get("address");
+        String clusterAddress = clusterSecrets.has("address")
+            ? (String) clusterSecrets.get("address")
+            : "";
         boolean isCloud = false;
         String apiBase = null, token = null;
         if (clusterSecrets.has("discovery-token")) {
