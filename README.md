@@ -10,11 +10,6 @@ and .NET or Python using either gRPC, or a fast shared-memory IPC mechanism.
 
 ## This Repository
 
-Clone this repository, including its submodules:
-```sh
-git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jex
-```
-
 This repository links to several submodules:
 * `clc` forks from the Hazelcast CLC repository and adds code to upload Jet jobs as YAML text
 * `hazelcast` forks from the Hazelcast repository (changes?)
@@ -29,9 +24,18 @@ In addition, this repository provides various tool to help test the proposed fea
 
 ## Quick Start
 
-All operations are scripted via the `jex.sh` shell script.
-One must first `source jex.sh` to initialize its environment.
-Then the `jex` alias becomes available. Try `jex help` to list commands.
+Clone this repository, including its submodules:
+```sh
+git clone --recurse-submodules https://github.com/zpqrtbnk/hazelcast-jex
+```
+
+Then activate the `jex` command (ONLY in Bash):
+```sh
+source jex.sh
+```
+
+The `jex` alias becomes available. Try `jex help` to list commands.
+Most operations are scripted via `jex`.
 
 The script needs to be configured (see top of the script), but do NOT edit the script.
 Instead, create a parallel `jex.sh.user` file and copy and customize the configuration section.
@@ -70,16 +74,24 @@ wait for entry with key example-key-20 to appear in result-map
 Found: example-key-20 = OtherThing(Value=__20__)
 ```
 
+>[!WARNING]
+>Beware! there are some hard-coded image names in the `jex-java/submit-java` code.
+
 ### Viridian Demo
 
 ```
+jex build-clc
+jex build-vrd
 jex dk-initialize
+jex login-quay
+jex login-viridian
+
 jex build-cluster-os
 jex build-cluster-ee-nlc
-jex login-quay
 jex build-dk-cluster-quay
+
 jex build-dk-runtime-python
-jex login-viridian
+
 jex create-viridian-cluster usercode.0
 jex enable-journal usercode.0
 jex build-jex-java
@@ -108,11 +120,15 @@ cluster:
 ```
 
 ```
+jex build-clc
 jex dk-initialize
+
 jex build-cluster-os
 jex build-cluster-ee
 jex build-dk-cluster-local
+
 jex build-dk-runtime-python
+
 jex start-k8-cluster
 jex start-k8-controller
 jex build-jex-java

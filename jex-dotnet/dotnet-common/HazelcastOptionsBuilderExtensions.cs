@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using Microsoft.Extensions.Logging;
+using System.Text.Json.Nodes;
 
 namespace Hazelcast.Demo;
 
@@ -53,5 +54,78 @@ public static class HazelcastOptionsBuilderExtensions
                             o.TimestampFormat = "hh:mm:ss.fff ";
                         }));
             });
+    }
+
+    public static HazelcastOptionsBuilder WithSecrets(this HazelcastOptionsBuilder builder, string secretsPath)
+    {
+        if (!Path.IsPathRooted(secretsPath))
+            throw new Exception("err: secrets path is not absolute.");
+        if (!Directory.Exists(secretsPath))
+            throw new Exception($"err: secrets directory '{secretsPath}' not found.");
+
+        var configJsonPath = Path.Combine(secretsPath, "config.json");
+        if (!File.Exists(configJsonPath))
+            throw new Exception($"err: config file '{configJsonPath}' not found.");
+
+        var configYamlPath = Path.Combine(secretsPath, "config.yaml");
+        if (!File.Exists(configYamlPath))
+            throw new Exception($"err: config file '{configYamlPath}' not found.");
+
+        JsonObject config;
+        using (var configJsonStream = File.OpenRead(configJsonPath))
+        {
+            config = JsonNode.Parse(configJsonStream)?.AsObject() ?? throw new Exception("meh?");
+        }
+
+        var clusterElement = config["cluster"].AsObject();
+        var clusterName = clusterElement["name"].ToString();
+        var clusterAddress = clusterElement.ContainsKey("address")
+            ? clusterElement["address"].ToString()
+            : null;
+        var isCloud = false;
+        string apiBase = null, token = null;
+        if (clusterElement.ContainsKey("discovery-token"))
+        {
+            isCloud = true;
+            token = clusterElement["discovery-token"].ToString();
+            apiBase = clusterElement["api-base"].ToString();
+        }
+
+        var useSsl = false;
+        string password = null, caPath = null, certPath = null, keyPath = null;
+        if (config.ContainsKey("ssl"))
+        {
+            useSsl = true;
+            var sslElement = config["ssl"];
+            password = sslElement["password"].ToString();
+            caPath = sslElement["ca-path"].ToString();
+            certPath = sslElement["cert-path"].ToString();
+            keyPath = sslElement["key-path"].ToString();
+        }
+
+        return builder.With(o =>
+        {
+            o.ClusterName = clusterName;
+            o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
+
+            if (useSsl)
+            {
+                var ssl = o.Networking.Ssl;
+                ssl.Enabled = true;
+                ssl.CertificatePath = certPath;
+                ssl.CertificatePassword = password;
+            }
+
+            if (isCloud)
+            {
+                var cloud = o.Networking.Cloud;
+                cloud.DiscoveryToken = token;
+                cloud.Url = new Uri(apiBase);
+            }
+            else
+            {
+                o.Networking.Addresses.Add(clusterAddress);
+            }
+        });
     }
 }

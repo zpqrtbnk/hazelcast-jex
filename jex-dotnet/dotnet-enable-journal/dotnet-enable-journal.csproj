@@ -14,4 +14,9 @@
     <PackageReference Include="Hazelcast.Net.Jet" Version="5.3.0-preview.0" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <ProjectReference Include="..\dotnet-common\dotnet-common.csproj" />
+  </ItemGroup>
+
 </Project>

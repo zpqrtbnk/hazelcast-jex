@@ -101,30 +101,7 @@ public class Program
                 compact.AddSerializer(new SomeThingSerializer());
                 compact.AddSerializer(new OtherThingSerializer());
             })
-            .With(o =>
-            {
-                o.ClusterName = clusterName;
-                o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
-
-                if (useSsl)
-                {
-                    var ssl = o.Networking.Ssl;
-                    ssl.Enabled = true;
-                    ssl.CertificatePath = certPath;
-                    ssl.CertificatePassword = password;
-                }
-
-                if (isCloud)
-                {
-                    var cloud = o.Networking.Cloud;
-                    cloud.DiscoveryToken = token;
-                    cloud.Url = new Uri(apiBase);
-                }
-                else
-                {
-                    o.Networking.Addresses.Add(clusterAddress);
-                }
-            })
+            .WithSecrets(args[0])
             .Build();
 
         await using var client = await HazelcastClientFactory.StartNewClientAsync(options);

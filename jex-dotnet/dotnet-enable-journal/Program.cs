@@ -1,4 +1,6 @@
-﻿namespace Hazelcast.Jex;
+﻿using Hazelcast.Demo;
+
+namespace Hazelcast.Jex;
 
 using Hazelcast;
 using Hazelcast.Jet; // though it should NOT be there
@@ -12,30 +14,15 @@ public class Program
         var optionsBuilder = new HazelcastOptionsBuilder()
             .With(args);
 
-        if (args.Length == 1)
+        if (args.Length != 1)
         {
-            var jsonText = File.ReadAllText(args[0]);
-            var secrets = JsonSerializer.Deserialize<JsonElement>(jsonText);
-            var clusterSecrets = secrets.GetProperty("cluster");
-            var sslSecrets = secrets.GetProperty("ssl");
-            optionsBuilder = optionsBuilder
-            .With(config =>
-                {
-                    config.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 4000;
-                    config.ClusterName = clusterSecrets.GetProperty("name").GetString();
-                    config.Networking.Cloud.DiscoveryToken = clusterSecrets.GetProperty("discovery-token").GetString();
-                    config.Networking.Cloud.Url = new Uri(clusterSecrets.GetProperty("api-base").GetString());
-                    config.Metrics.Enabled = true;
-                    config.Networking.Ssl.Enabled = true;
-                    config.Networking.Ssl.ValidateCertificateChain = false;
-                    config.Networking.Ssl.Protocol = SslProtocols.Tls12;
-                    config.Networking.Ssl.CertificatePath = "/home/sgay/.hazelcast/configs/usercode.0/client.pfx";
-                    config.Networking.Ssl.CertificatePassword = sslSecrets.GetProperty("key-password").GetString();
-                });
-       }
+            Console.WriteLine("usage: enable <config>");
+            return;
+        }
 
-       var options = optionsBuilder
-            .Build();
+        var options = optionsBuilder
+           .WithSecrets(args[0])
+           .Build();
         await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
         await client.EnableMapJournal("streamed-map");
     }
