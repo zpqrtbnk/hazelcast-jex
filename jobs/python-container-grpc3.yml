@@ -24,7 +24,8 @@ job:
     # transform using user code
     - transform: user-code
 
-      image-name: quay.io/hz_stephane/python-usercode-base:latest
+      #image-name: quay.io/hz_stephane/usercode-python-slim:latest
+      image-name: zpqrtbnk/usercode-python-slim:latest
       resources:
         - usercode
         - secrets

@@ -39,12 +39,13 @@ public class SubmitPythonJetUserCode {
     final static int parallelOperations = 1; // operations per processor
     final static boolean preserveOrder = true;
 
+    static String imageBase;
     static boolean attachCode;
 
     public static void main(String[] args) throws Exception {
 
-        if (args.length < 1 || args.length > 2) {
-            System.out.println("usage: submit <config> [<usercode-path>]");
+        if (args.length < 2 || args.length > 3) {
+            System.out.println("usage: submit <config> <image-base> [<usercode-path>]");
             return;
         }
 
@@ -69,10 +70,12 @@ public class SubmitPythonJetUserCode {
             return;
         }
 
+        imageBase = args[1];
+
         Path usercodePath = null;
-        if (args.length == 2) {
+        if (args.length == 3) {
             attachCode = true;
-            usercodePath = Paths.get(args[1]);
+            usercodePath = Paths.get(args[2]);
             if (!usercodePath.isAbsolute()) {
                 System.out.println("err: usercode path is not absolute.");
                 return;
@@ -152,9 +155,9 @@ public class SubmitPythonJetUserCode {
     private static <T> StreamStage<T> applyMapUsingUserCodeContainer(StreamStage<?> stage, JobConfig jobConfig) {
 
         // must use Quay for multi-arch
-        final String imageName = attachCode
-            ? "quay.io/hz_stephane/python-usercode-base:latest"
-            : "quay.io/hz_stephane/python-usercode:latest";
+        final String imageName = imageBase + "/" + (attachCode
+            ? "usercode-python-slim:latest"
+            : "usercode-python-slim-example:latest");
 
         UserCodeContainerConfig config = new UserCodeContainerConfig();
         config.setImageName(imageName);

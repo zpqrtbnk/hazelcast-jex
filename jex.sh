@@ -588,27 +588,27 @@ _dk_cluster_clear_image () {
 __build_dk_runtime_python () { echo "Build the Python runtime Docker images"; }
 build_dk_runtime_python () {
 
-    #BASE_IMAGE=$DOCKER_REPOSITORY/python-usercode-base:latest
-    BASE_IMAGE=quay.io/$QUAY_USER/python-usercode-base:latest
+    #IMAGE_ROOT=quay.io/$QUAY_USER
+    IMAGE_ROOT=$DOCKER_REPOSITORY
 
-    #EXAMPLE_IMAGE=$DOCKER_REPOSITORY/python-usercode:latest
-    EXAMPLE_IMAGE=quay.io/$QUAY_USER/python-usercode:latest
+    IMAGE_SLIM=$IMAGE_ROOT/usercode-python-slim:latest
+    IMAGE_ML=$IMAGE_ROOT/usercode-python-ml:latest
+    IMAGE_SLIM_EXAMPLE=$IMAGE_ROOT/usercode-python-slim-example:latest
 
-    # build a base image - and push (need to do both at once due to multi-platform)
+    # build and push images (need to do both at once due to multi-platorm)
+
+    # build the slim base image
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
-        -t $BASE_IMAGE \
-        -f hazelcast-usercode/python/docker/dockerfile.base \
+        -t $IMAGE_SLIM \
+        -f hazelcast-usercode/python/docker/dockerfile.slim \
         hazelcast-usercode/python
 
-    #docker push $DOCKER_REPOSITORY/python-usercode-base:latest
-
-    # build an example image (with actual usercode included) - and push (...)
-    docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
-        -t $EXAMPLE_IMAGE \
-        -f hazelcast-usercode/python/docker/dockerfile.example \
+    # build the slim+example (contains usercode) image
+    echo docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+        -t $IMAGE_SLIM_EXAMPLE \
+        --build-arg="FROMIMAGE=$IMAGE_SLIM" \
+        -f hazelcast-usercode/python/docker/dockerfile.slim+example \
         hazelcast-usercode/python/example
-
-    #docker push $DOCKER_REPOSITORY/python-usercode:latest
 }
 
 
@@ -671,8 +671,8 @@ run_dk_runtime_python () {
     # BEWARE! the job need to know the address of the gRPC runtime server
 
     # select the base or full image
-    #IMAGE=$DOCKER_REPOSITORY/python-usercode
-    IMAGE=$DOCKER_REPOSITORY/python-usercode-base
+    #IMAGE=$DOCKER_REPOSITORY/usercode-python-slim-example
+    IMAGE=$DOCKER_REPOSITORY/usercode-python-slim
 
 	docker run --rm -it --net jex \
 		-p 5252:5252 \
@@ -809,14 +809,27 @@ submit_java () {(
         echo "err: missing config id"
         return
     fi
+
+    IMAGE_BASE=$2
+    if [ -z "$IMAGE_BASE" ]; then
+        echo "err: missing image base"
+        return
+    fi
+
+    CODEPATH=""
+    if [ "$3" != "full" ]; then
+        CODEPATH=$JEX/hazelcast-usercode/python/example
+    fi
+
     HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
     TARGET=$JEX/jex-java/java-submit/target
     CLASSPATH="$TARGET/java-submit-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
     CLCHOME=$($CLC home)
 
+    # using the base image + uploading the code, or
+    # if $2 is 'full', using the example full image which contains the code already
     java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \
-        $CLCHOME/configs/$CONFIG_ID \
-        $JEX/hazelcast-usercode/python/example
+        $CLCHOME/configs/$CONFIG_ID $IMAGE_BASE $CODEPATH
 )}
 
 
