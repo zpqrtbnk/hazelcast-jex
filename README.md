@@ -90,14 +90,18 @@ jex build-cluster-os
 jex build-cluster-ee-nlc
 jex build-dk-cluster-quay
 
-jex build-dk-runtime-python
+jex build-dk-runtime-python quay.io/hz_stephane
 
 jex create-viridian-cluster usercode.0
 jex enable-journal usercode.0
 jex build-jex-java
-jex submit-java usercode.0
+jex submit-java usercode.0 quay.io/hz_stephane [code] [secrets]
 jex run-example usercode.0
 ```
+
+You can use anything in place of `usercode.0` - that is the name of your cluster on Viridian. Replace `quay.io/hz_stephane` with whatever registry name you want to use for the Python Runtime docker image. Specify `code` in order to submit code (from the Python Runtime example) and `secrets` to submit the secrets.
+
+If you specify `code` we'll use the base image, and transfer the code to the image, else we'll use the base+code image.
 
 ### Local Kubernetes Demo
 
@@ -127,14 +131,17 @@ jex build-cluster-os
 jex build-cluster-ee
 jex build-dk-cluster-local
 
-jex build-dk-runtime-python
+jex build-dk-runtime-python zpqrtbnk 
 
 jex start-k8-cluster
 jex start-k8-controller
 jex build-jex-java
-jex submit-java k8
+jex submit-java k8 zpqrtbnk [code] [secrets]
 jex run-example k8
 ```
+
+Here we put the Python Runtime image on Docker Hub (under Stephan's `zpqrtbnk` account, you want to change this).
+Rest works similar to Viridian.
 
 ### More Demos
 
@@ -148,14 +155,8 @@ These are currently being polished and will be demoed later.
 
 These are being investigated... And the list is not complete at all...
 
-* Python logs do not bubble up to Java logs correctly
+* If you don't specify `secrets` if fails because the secrets are currently n/a on the runtime
+* The regitry auth credentials for fetching the Python Runtime are somehow borked
 * Jet resource directories must be flat and that is a pain, can it be fixed?
 * Currently not implementing batches, only streaming, so?
 
-More work to do:
-* Implement more Yaml support (for Kafka etc)
-* Implement the existing Python ML example as a Yaml pipeline
-* General work on securing the communication between member & runtime
-* Java should test for python+pip presence, but how?
-
-In addition, most of the codebase is POC-quality and needs to be revisited, cleaned up, etc.

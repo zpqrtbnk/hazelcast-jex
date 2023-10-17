@@ -354,6 +354,10 @@ _build_cluster_ee () {(
     # -nsu = no snapshot update (won't fetch latest snapshot of OS from network, use our local one!)
     cd hazelcast-enterprise
     $MVN -nsu -Pquick $MVNLC clean install
+    if [ $? -ne 0 ]; then
+        echo "ERR: Maven failed to build"
+        return 1
+    fi
     cd distribution/target
     rm -rf hazelcast-enterprise-$HZVERSION
     unzip hazelcast-enterprise-$HZVERSION.zip
@@ -588,8 +592,12 @@ _dk_cluster_clear_image () {
 __build_dk_runtime_python () { echo "Build the Python runtime Docker images"; }
 build_dk_runtime_python () {
 
-    #IMAGE_ROOT=quay.io/$QUAY_USER
-    IMAGE_ROOT=$DOCKER_REPOSITORY
+    if [ -z "$1" ]; then
+        echo "err: missing registry"
+        return 1
+    fi
+    IMAGE_ROOT=$1
+    shift
 
     IMAGE_SLIM=$IMAGE_ROOT/usercode-python-slim:latest
     IMAGE_ML=$IMAGE_ROOT/usercode-python-ml:latest
@@ -600,14 +608,16 @@ build_dk_runtime_python () {
     # build the slim base image
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
         -t $IMAGE_SLIM \
-        -f hazelcast-usercode/python/docker/dockerfile.slim \
+        -f hazelcast-usercode/python/docker/slim.dockerfile \
         hazelcast-usercode/python
+        
+    # todo: build a ML image with way more dependencies
 
     # build the slim+example (contains usercode) image
-    echo docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+    docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
         -t $IMAGE_SLIM_EXAMPLE \
         --build-arg="FROMIMAGE=$IMAGE_SLIM" \
-        -f hazelcast-usercode/python/docker/dockerfile.slim+example \
+        -f hazelcast-usercode/python/docker/slim+example.dockerfile \
         hazelcast-usercode/python/example
 }
 
@@ -804,22 +814,47 @@ build_jex_java () {(
 __submit_java () { echo "Submit job to cluster from Java"; }
 submit_java () {(
 
-    CONFIG_ID=$1
-    if [ -z "$CONFIG_ID" ]; then
+    # args: <config-id> <image-base> [code,secrets]
+
+    if [ -z "$1" ]; then
         echo "err: missing config id"
         return
     fi
+    CONFIG_ID=$1
+    shift
 
-    IMAGE_BASE=$2
-    if [ -z "$IMAGE_BASE" ]; then
+    if [ -z "$1" ]; then
         echo "err: missing image base"
         return
     fi
+    IMAGE_BASE=$1
+    shift
 
-    CODEPATH=""
-    if [ "$3" != "full" ]; then
-        CODEPATH=$JEX/hazelcast-usercode/python/example
-    fi
+    IMAGE="$IMAGE_BASE/usercode-python-slim-example:latest"
+    CODE=""
+    SECRETS=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            code)
+                CODE="--code-path=$JEX/hazelcast-usercode/python/example"
+                IMAGE="$IMAGE_BASE/usercode-python-slim:latest"
+                shift
+                ;;
+            secrets)
+                SECRETS="--submit-secrets"
+                shift
+                ;;
+            *)
+                echo "meh?"
+                exit 1
+                ;;
+        esac
+    done
+    
+    # FIXME WIP
+    REGAUTH=
+    #REGAUTH="--registry-auth={"auths":{"quay.io":{"auth":"aHpfc3RlcGhhbmU6d1lqUmZpTkU5bld4a0hBeWlqTW9mS2ZpUHltUnNOeThYWWsvaXlxbjE5ZUIxVmg4U2taVjBYVFBsNkVodjh0MEdsOUJMSndpTjBuNEZuQ0xoNHdkQ1E9PQ=="}}}
 
     HZHOME=$JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION
     TARGET=$JEX/jex-java/java-submit/target
@@ -828,8 +863,10 @@ submit_java () {(
 
     # using the base image + uploading the code, or
     # if $2 is 'full', using the example full image which contains the code already
-    java -classpath $(_classpath $CLASSPATH) org.example.SubmitPythonJetUserCode \
-        $CLCHOME/configs/$CONFIG_ID $IMAGE_BASE $CODEPATH
+    java -classpath $(_classpath $CLASSPATH) org.example.Submit \
+        --secrets-path $CLCHOME/configs/$CONFIG_ID \
+        --runtime-image $IMAGE \
+        $CODE $SECRETS $REGAUTH
 )}
 
 
