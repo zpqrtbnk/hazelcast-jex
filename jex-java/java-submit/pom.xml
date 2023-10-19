@@ -54,7 +54,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>org.example.SubmitPythonJetUserCode</mainClass>
+              <mainClass>org.example.Submit</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -87,7 +87,7 @@
               <goal>java</goal>
             </goals>
             <configuration>
-              <mainClass>org.example.SubmitPythonJetUserCode</mainClass>
+              <mainClass>org.example.Submit</mainClass>
             </configuration>
           </execution>
         </executions>

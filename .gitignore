@@ -15,6 +15,7 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+vrd_config.yaml
 
 /_ReSharper.Caches
 .github/secrets

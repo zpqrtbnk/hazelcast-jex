@@ -6,6 +6,9 @@ import com.hazelcast.config.SSLConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.*;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
+import com.hazelcast.usercode.UserCodeConfig;
 import com.hazelcast.usercode.UserCodeContainerConfig;
 import com.hazelcast.usercode.UserCodePassthruConfig;
 import com.hazelcast.usercode.jet.UserCodeTransforms;
@@ -22,7 +25,7 @@ public class Submitter {
 
     private final SubmitCommand submitArgs;
 
-    // usercode stage parameters, keep them constant for now
+    // usercode stage parameters, we keep them constant for now
     final static int parallelProcessors = 2; // processors per member
     final static int parallelOperations = 1; // operations per processor
     final static boolean preserveOrder = true;
@@ -32,6 +35,8 @@ public class Submitter {
     }
 
     public int submit() throws Exception {
+
+        ILogger logger = Logger.getLogger(Submitter.class);
 
         Path secretsPath = Paths.get(submitArgs.secretsPath);
         if (!secretsPath.isAbsolute()) {
@@ -136,25 +141,34 @@ public class Submitter {
             clientConfig.getNetworkConfig().addAddress(clusterAddress);
         }
 
+        String msg = "Submit ";
+        if (submitArgs.runtime.isContainer) msg += "container runtime (image=" + submitArgs.runtime.runtimeImage + ")";
+        if (submitArgs.runtime.isPassthru) msg += "passhtru runtime (address=" + submitArgs.runtime.runtimeAddress + ")";
+        if (submitArgs.submitSecrets) msg += " w/secrets";
+        if (submitArgs.submitCode) msg += " w/code";
+
         // get the client, and submit
         HazelcastInstance hz = HazelcastClient.newHazelcastClient(clientConfig);
+        logger.info(msg);
         hz.getJet().newJob(pipeline, jobConfig);
         return 0;
+    }
+
+    private void addResources(UserCodeConfig config) {
+        if (submitArgs.submitSecrets) config.addResource("secrets");
+        if (submitArgs.submitCode) config.addResource("usercode");
     }
 
     private <T> StreamStage<T> applyMapUsingUserCodeContainer(StreamStage<?> stage, JobConfig jobConfig, String imageName) {
 
         UserCodeContainerConfig config = new UserCodeContainerConfig();
         config.setImageName(imageName);
-        config.setPreserveOrder(preserveOrder);
-        config.setMaxConcurrentOps(parallelOperations);
         config.setName("PythonJetUserCode");
 
-        if (submitArgs.submitSecrets) config.addResource("secrets");
-        if (submitArgs.submitCode) config.addResource("usercode");
+        addResources(config);
 
         return stage
-                .apply(UserCodeTransforms.<T>mapUsingUserCode(config))
+                .apply(UserCodeTransforms.<T>mapUsingUserCode(config, parallelOperations, preserveOrder))
                 .setLocalParallelism(parallelProcessors);
     }
 
@@ -166,11 +180,10 @@ public class Submitter {
         config.setRuntimeAddress(addressParts[0]);
         config.setRuntimePort(Integer.parseInt(addressParts[1]));
 
-        if (submitArgs.submitSecrets) config.addResource("secrets");
-        if (submitArgs.submitCode) config.addResource("usercode");
+        addResources(config);
 
         return stage
-                .apply(UserCodeTransforms.<T>mapUsingUserCode(config))
+                .apply(UserCodeTransforms.<T>mapUsingUserCode(config, parallelOperations, preserveOrder))
                 .setLocalParallelism(parallelProcessors);
     }
 
