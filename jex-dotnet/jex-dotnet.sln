@@ -7,15 +7,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-submit", "dotnet-sub
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-example", "dotnet-example\dotnet-example.csproj", "{A5DC2904-1758-446C-97FB-3133C26A9B69}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-shmem", "dotnet-shmem\dotnet-shmem.csproj", "{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-common", "dotnet-common\dotnet-common.csproj", "{948AE35E-E7F1-4844-88F2-BD9C9A037471}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-grpc", "dotnet-grpc\dotnet-grpc.csproj", "{27CFF623-B7F4-4664-B993-427C88A9ACED}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-grpc-client", "dotnet-grpc-client\dotnet-grpc-client.csproj", "{E1B28009-958A-4840-BB34-8084E99C1679}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dotnet-enable-journal", "dotnet-enable-journal\dotnet-enable-journal.csproj", "{427333C4-0D73-4CC5-B873-67EF286CB9A7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dotnet-usercode", "dotnet-usercode\dotnet-usercode.csproj", "{722D8DF2-4E07-4B7F-9C00-F839CC743E35}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,18 +29,10 @@ Global
 		{A5DC2904-1758-446C-97FB-3133C26A9B69}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A5DC2904-1758-446C-97FB-3133C26A9B69}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A5DC2904-1758-446C-97FB-3133C26A9B69}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4EC51F09-030E-4B75-8846-60B6EEEE6DF7}.Release|Any CPU.Build.0 = Release|Any CPU
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{948AE35E-E7F1-4844-88F2-BD9C9A037471}.Release|Any CPU.Build.0 = Release|Any CPU
-		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{27CFF623-B7F4-4664-B993-427C88A9ACED}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E1B28009-958A-4840-BB34-8084E99C1679}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{E1B28009-958A-4840-BB34-8084E99C1679}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E1B28009-958A-4840-BB34-8084E99C1679}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -51,6 +41,10 @@ Global
 		{427333C4-0D73-4CC5-B873-67EF286CB9A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{427333C4-0D73-4CC5-B873-67EF286CB9A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{427333C4-0D73-4CC5-B873-67EF286CB9A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{722D8DF2-4E07-4B7F-9C00-F839CC743E35}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{722D8DF2-4E07-4B7F-9C00-F839CC743E35}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{722D8DF2-4E07-4B7F-9C00-F839CC743E35}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{722D8DF2-4E07-4B7F-9C00-F839CC743E35}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

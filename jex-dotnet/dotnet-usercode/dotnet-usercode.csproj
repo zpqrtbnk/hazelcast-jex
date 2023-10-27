@@ -1,17 +1,19 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net7.0</TargetFramework>
-    <RootNamespace>Hazelcast.Demo.GrpcClient</RootNamespace>
+    <RootNamespace>dotnet_usercode</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Hazelcast.Net.UserCode" Version="5.3.0-preview.0" />
+		<!--
 		<PackageReference Include="Hazelcast.Net" Version="5.3.0-preview.0" />
 		<PackageReference Include="Hazelcast.Net.UserCode.ClientServer.Grpc" Version="5.3.0-preview.0" />
 		<PackageReference Include="Hazelcast.Net.Jet" Version="5.3.0-preview.0" />
+		-->
 	</ItemGroup>
 
 	<ItemGroup>

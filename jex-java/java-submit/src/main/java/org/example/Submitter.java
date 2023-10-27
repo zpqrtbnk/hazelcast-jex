@@ -11,6 +11,7 @@ import com.hazelcast.logging.Logger;
 import com.hazelcast.usercode.UserCodeConfig;
 import com.hazelcast.usercode.UserCodeContainerConfig;
 import com.hazelcast.usercode.UserCodePassthruConfig;
+import com.hazelcast.usercode.UserCodeProcessConfig;
 import com.hazelcast.usercode.jet.UserCodeTransforms;
 import org.json.JSONObject;
 
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -115,6 +117,8 @@ public class Submitter {
             stage2 = applyMapUsingUserCodeContainer(stage, jobConfig, submitArgs.runtime.runtimeImage);
         } else if (submitArgs.runtime.isPassthru) {
             stage2 = applyMapUsingUserCodePassthru(stage, jobConfig, submitArgs.runtime.runtimeAddress);
+        } else if (submitArgs.runtime.isProcess) {
+            stage2 = applyMapUsingUserCodeProcess(stage, jobConfig, submitArgs);
         } else {
             throw new Exception("meh");
         }
@@ -161,10 +165,10 @@ public class Submitter {
 
     private <T> StreamStage<T> applyMapUsingUserCodeContainer(StreamStage<?> stage, JobConfig jobConfig, String imageName) {
 
-        UserCodeContainerConfig config = new UserCodeContainerConfig();
-        config.setImageName(imageName);
-        config.setName("PythonJetUserCode");
+        UserCodeContainerConfig config = new UserCodeContainerConfig()
+            .setImageName(imageName);
 
+        config.setName("PythonJetUserCode");
         addResources(config);
 
         return stage
@@ -174,12 +178,12 @@ public class Submitter {
 
     private <T> StreamStage<T> applyMapUsingUserCodePassthru(StreamStage<?> stage, JobConfig jobConfig, String address) {
 
-        // beware! address and port of passthru runtime are hardcoded here
-        UserCodePassthruConfig config = new UserCodePassthruConfig();
         String[] addressParts = address.split(":");
-        config.setRuntimeAddress(addressParts[0]);
-        config.setRuntimePort(Integer.parseInt(addressParts[1]));
+        UserCodePassthruConfig config = new UserCodePassthruConfig()
+                .setRuntimeAddress(addressParts[0])
+                .setRuntimePort(Integer.parseInt(addressParts[1]));
 
+        config.setName("PythonJetUserCode");
         addResources(config);
 
         return stage
@@ -187,11 +191,20 @@ public class Submitter {
                 .setLocalParallelism(parallelProcessors);
     }
 
-    // private static StreamStage<?> mapUsingUserCodeProcess(StreamStage<?> stage, JobConfig jobConfig) {
+     private <T> StreamStage<T> applyMapUsingUserCodeProcess(StreamStage<?> stage, JobConfig jobConfig, SubmitCommand command) {
 
-    //     UserCodeProcessConfig config = new UserCodeProcessConfig();
-    //     config.set...
+         UserCodeProcessConfig config = new UserCodeProcessConfig()
+                 .setProcessName(command.runtime.processName)
+                 .setProcessPath(command.processPath)
+                 .setProcessPort(command.processPort)
+                 .addProcessArgs(List.of(command.processArgs))
+                 .setWorkDirectory(command.workDirectory);
 
-    //     return stage.apply(UserCodeTransforms.<Map.Entry<Object,Object>>mapUsingUserCode(config));
-    // }
+         config.setName("PythonJetUserCode");
+         addResources(config);
+
+         return stage
+                 .apply(UserCodeTransforms.<T>mapUsingUserCode(config, parallelOperations, preserveOrder))
+                 .setLocalParallelism(parallelProcessors);
+     }
 }

@@ -1,23 +1,57 @@
-﻿
-using System.Text;
-using Google.Protobuf;
-using Grpc.Net.Client;
-using Hazelcast.UserCode;
+﻿using Grpc.Net.Client;
 using Hazelcast.UserCode.Data;
-using Hazelcast.UserCode.Transports.Grpc;
-using Microsoft.Extensions.Options;
-using Hazelcast.Jet;
+using Hazelcast.UserCode.ClientServer.Data;
+using Hazelcast.UserCode.ClientServer;
+using Hazelcast.UserCode.ClientServer.Grpc;
 using System.Globalization;
-using Ionic.Zip;
+using Grpc.Core;
+using System.IO.Compression;
 using Hazelcast.DistributedObjects;
+using Hazelcast.UserCode.ClientServer.Grpc.Proto;
 using Microsoft.Extensions.Logging;
 
 namespace Hazelcast.Demo.GrpcClient;
 
 public class Program
 {
+    private const int GrpcMessageMaxSize = 2 * 1024 * 1024; // is 2MB ok?
+    private static readonly TimeSpan GrpcTimeout = TimeSpan.FromSeconds(120); // longer that the CONNECT timeout, server-side
+
+    private class GrpcCall : IDisposable
+    {
+        private readonly GrpcChannel _channel;
+        private readonly AsyncDuplexStreamingCall<Message, Message> _stream;
+
+        private GrpcCall(GrpcChannel channel, AsyncDuplexStreamingCall<Message, Message> stream)
+        {
+            _channel = channel;
+            _stream = stream;
+        }
+
+        public static GrpcCall Open(string address, GrpcChannelOptions options)
+        {
+            var channel = GrpcChannel.ForAddress(address, options);
+            var grpc = new Hazelcast.UserCode.ClientServer.Grpc.Proto.Server.ServerClient(channel);
+            var stream = grpc.invoke();
+            return new GrpcCall(channel, stream);
+        }
+
+        public IClientStreamWriter<Message> RequestStream => _stream.RequestStream;
+
+        public IAsyncStreamReader<Message> ResponseStream => _stream.ResponseStream;
+
+        public MessageIdProvider MessageId { get; } = new MessageIdProvider();
+
+        public void Dispose()
+        {
+            _stream.Dispose();
+            _channel.Dispose();
+        }
+    }
+
     public static async Task Main()
     {
+/*
         var hzoptions = new HazelcastOptionsBuilder()
             .With(o =>
             {
@@ -51,83 +85,30 @@ public class Program
             await UploadDirectoryResourceAsync(hzclient, jobNumId, resourceId, path);
             Console.WriteLine("Uploaded resource.");
         }
+*/
+	string jobId = "";
 
         // now, the schema should be on the cluster
         // when the gRPC service receives a SomeThing instance
         // it will get the corresp schema from the server
 
-        using var channel = GrpcChannel.ForAddress("http://localhost:5252");
-        var grpc = new Transport.TransportClient(channel);
-        var stream = grpc.invoke();
-        var id = 0L;
+        // configure gRPC, see: https://learn.microsoft.com/en-us/aspnet/core/grpc/configuration
+        var grpcOptions = new GrpcChannelOptions();
+        using var call1 = GrpcCall.Open("http://localhost:5252", grpcOptions);
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .CONNECT");
-        // var connectArgs = @"
-        // {
-        //     ""job"": {
-        //         ""id"": ""%%JOBID%%"",
-        //         ""resources"": [
-        //             {
-        //                 ""type"": ""DIRECTORY"",
-        //                 ""id"": ""usercode""
-        //             }
-        //         ]
-        //     },
-        //     ""cluster"": {
-        //         ""name"": ""dev"",
-        //         ""address"": ""localhost:5701""
-        //     }
-            
-        // }
-        // ";
-        var connectArgs = @"
+        // let's pretend that *we* are the usercode for now
+        // in reality, would need to send the code for the proper platform/architecture
+        // and... how can we know? should we be able to ASK the runtime for this?
+        var thisDll = typeof(Program).Assembly.Location;
+        if (!await SendCopyDirectory(call1, "usercode", Path.GetDirectoryName(thisDll))) return;
+
+        // connect
+        if (!await SendConnect(call1, "dev", "localhost:5701", jobId))
         {
-            ""job"": {
-                ""id"": ""%%JOBID%%""
-            },
-            ""cluster"": {
-                ""name"": ""dev"",
-                ""address"": ""localhost:5701""
-            }
-            
-        }
-        ";
-        connectArgs = connectArgs.Replace("%%JOBID%%", jobId);
-        var connectMessage = new UserCodeMessage(id++, UserCodeMessageType.Connect, connectArgs);
-        await stream.RequestStream.WriteAsync(connectMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        var response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
-        {
-            Console.WriteLine("ERROR: " + response.PayloadString);
             return;
         }
 
-        //Console.WriteLine("--------");
-        //Console.WriteLine("send: methodNotSupported");
-        //var errMessage = new UserCodeMessage(id++, "methodNotSupported");
-        //await stream.RequestStream.WriteAsync(errMessage.ToGrpcMessage());
-        //await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)); // FIXME use everywhere!
-        //response = stream.ResponseStream.Current.ToMessage();
-        //Console.WriteLine($"response: {response.FunctionName}");
-        //if (response.IsError)
-        //{
-        //    Console.WriteLine("EXPECTED ERROR: " + response.PayloadString);
-        //}
-        //else
-        //{
-        //    Console.WriteLine("ERROR: response is not error?!");
-        //    return;
-        //}
-
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .USER_CODE");
-        var random = Random.Shared.Next(0, 100);
-        var someThing= new SomeThing { Value = random };
-        var input = IMapEntry.New($"key-{random}", someThing);
-
+        // prepare a client
         var hazelcastOptions = new HazelcastOptionsBuilder()
             .With(options =>
             {
@@ -141,142 +122,116 @@ public class Program
             .Build();
         var client = await UserCodeClient.StartNew(hazelcastOptions); // or pass the configure delegate?
 
-        var payload = await client.ToByteArray(input);
-        var message = new UserCodeMessage(id++, UserCodeMessageType.UserCode, payload);
-        await stream.RequestStream.WriteAsync(message.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)); // FIXME use everywhere!
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
+        static bool WriteResult(object result)
         {
-            Console.WriteLine("ERROR: " + response.PayloadString);
+            Console.WriteLine("result:");
+            switch (result)
+            {
+                case string s:
+                    Console.WriteLine($"string: {s}");
+                    break;
+                case IMapEntry mapEntry:
+                    Console.WriteLine($"key:   {mapEntry.GetKey<string>()?.ToString() ?? "<null>"}");
+                    Console.WriteLine($"value: {mapEntry.GetValue<OtherThing>()?.ToString() ?? "<null>"}");
+                    break;
+                case null:
+                    Console.WriteLine("<null>");
+                    return false; // error
+                default:
+                    Console.WriteLine($"{result.GetType()}: {result}");
+                    break;
+            }
+
+            return true;
+        }
+
+        // user code
+        var result = await SendUserCode(call1, client, "this is a test");
+        if (!WriteResult(result)) return;
+
+        // user code
+        result = await SendUserCode(call1, client, "this is another test");
+        if (!WriteResult(result)) return;
+
+        // test file copy
+        if (await SendCopyZip(call1, "path/to/random-file.txt", "Program.cs"))
+        {
+            Console.WriteLine("error: should have failed (not a valid zip)");
             return;
         }
 
-        var result = await client.ToObject<object>(response.PayloadBytes);
-        Console.WriteLine("result:");
-        Console.WriteLine(result);
-        if (result is IMapEntry mapEntry)
+        if (await SendCopy(call1, "/path/to/random-file.txt", "Program.cs"))
         {
-            Console.WriteLine($"key:   {mapEntry.GetKey<string>()?.ToString() ?? "<null>"}");
-            Console.WriteLine($"value: {mapEntry.GetValue<OtherThing>()?.ToString() ?? "<null>"}");
-            //Console.WriteLine($"value: {mapEntry.GetKey<object>()}");
-        }
-
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .COPY");
-        var fileObject = new FileObject {Path = "path/to/random-file.txt", Bytes = File.ReadAllBytes("random-file.txt")};
-        payload = await client.ToByteArray(fileObject);
-        var copyMessage = new UserCodeMessage(id++, UserCodeMessageType.Copy, payload);
-        await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
-        {
-            Console.WriteLine("ERROR: " + response.PayloadString);
+            Console.WriteLine("error: should have failed (path is absolute)");
             return;
         }
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .COPY_ZIP");
-        fileObject = new FileObject { Path = "path/to/random-file.txt", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.txt") };
-        payload = await client.ToByteArray(fileObject);
-        copyMessage = new UserCodeMessage(id++, UserCodeMessageType.CopyZip, payload);
-        await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
+        if (await SendCopy(call1, "path/../../../to/random-file.txt", "Program.cs"))
         {
-            Console.WriteLine("ERROR: " + response.PayloadString);
-        }
-        else
-        {
-            Console.WriteLine("ERROR: SHOULD HAVE FAILED");
+            Console.WriteLine("error: should have failed (path leads to outside of resources directory)");
             return;
         }
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .COPY");
-        fileObject = new FileObject { Path = "/path/to/random-file.txt", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.txt") };
-        payload = await client.ToByteArray(fileObject);
-        copyMessage = new UserCodeMessage(id++, UserCodeMessageType.Copy, payload);
-        await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
+        if (await SendCopyDirectory(call1, "..", Path.GetDirectoryName(thisDll)))
         {
-            Console.WriteLine("ERROR: " + response.PayloadString);
-        }
-        else
-        {
-            Console.WriteLine("ERROR: SHOULD HAVE FAILED");
+            Console.WriteLine("error: should have failed (path leads to outside of resources directory)");
             return;
         }
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .COPY");
-        fileObject = new FileObject { Path = "path/../../../to/random-file.txt", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.txt") };
-        payload = await client.ToByteArray(fileObject);
-        copyMessage = new UserCodeMessage(id++, UserCodeMessageType.Copy, payload);
-        await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
+        if (await SendCopyDirectory(call1, "", Path.GetDirectoryName(thisDll)))
         {
-            Console.WriteLine("ERROR: " + response.PayloadString);
-        }
-        else
-        {
-            Console.WriteLine("ERROR: SHOULD HAVE FAILED");
+            Console.WriteLine("error: should have failed (no path)");
             return;
         }
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .COPY_ZIP");
-        fileObject = new FileObject { Path = "path/to/random-file.zip", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.zip") };
-        payload = await client.ToByteArray(fileObject);
-        copyMessage = new UserCodeMessage(id++, UserCodeMessageType.CopyZip, payload);
-        await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
+        // end
+        if (!await SendEnd(call1)) return;
+
+        // after END has been sent, the client MUST terminate the gRPC call
+        call1.Dispose();
+
+        // FIXME that won't work if the DLL name is not expected by the server
+        // well well well...
+
+        // and open a new one if needed
+        using var call2 = GrpcCall.Open("http://localhost:5252", grpcOptions);
+
+        // FIXME
+        // in Python we can do res:usercode and that is the path to the directory
+        // in .NET we do res:usercode/MyCode.dll and that is the path to the dll
+        // these are just conventions, or?!
+        // should we say that the path is always the path to a directory
+        // and the name is dll+type?
+        // but in Python you cannot rename the Transform method...
+        //
+        // and then...
+        // this fails to load dotnet-usercode.dll dependencies such as dotnet-common.dll
+
+        // again
+        if (await SendConnect(call2, "dev", "localhost:5701", jobId, usercodeFile: "res:usercode/dotnet-usercode.dll"))
         {
-            Console.WriteLine("ERROR: " + response.PayloadString);
+            Console.WriteLine("error: should have failed, no user code");
             return;
         }
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .COPY_ZIP");
-        fileObject = new FileObject { Path = "random-file.zip", ChunkCount = 1, ChunkNumber = 0, Bytes = File.ReadAllBytes("random-file.zip") };
-        payload = await client.ToByteArray(fileObject);
-        copyMessage = new UserCodeMessage(id++, UserCodeMessageType.CopyZip, payload);
-        await stream.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
-        {
-            Console.WriteLine("ERROR: " + response.PayloadString);
-            return;
-        }
+        // copy
+        var otherDir = "../dotnet-usercode/bin/Debug/net7.0";
+        if (!await SendCopyDirectory(call2, "usercode", otherDir)) return;
 
-        Console.WriteLine("--------");
-        Console.WriteLine("send: .END");
-        var endMessage = new UserCodeMessage(id++, UserCodeMessageType.End);
-        await stream.RequestStream.WriteAsync(endMessage.ToGrpcMessage());
-        await stream.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        response = stream.ResponseStream.Current.ToMessage();
-        Console.WriteLine($"response: {response.Type}");
-        if (response.IsError)
-        {
-            Console.WriteLine("ERROR: " + response.PayloadString);
-            return;
-        }
+        // again
+        // AND we have modified the usercodeFile, no need to set it here again
+        if (!await SendConnect(call2, "dev", "localhost:5701", jobId)) return;
+
+        // user code
+        var random = Random.Shared.Next(0, 100);
+        var someThing = new SomeThing { Value = random };
+        var input = IMapEntry.New($"key-{random}", someThing);
+        result = await SendUserCode(call2, client, input);
+        if (!WriteResult(result)) return;
+
+        // end
+        if (!await SendEnd(call2)) return;
+        call2.Dispose();
 
         Console.WriteLine("--------");
     }
@@ -308,7 +263,7 @@ public class Program
         return long.Parse(jobIdString.Replace("-", ""), NumberStyles.HexNumber);
     }
 
-    private static async Task UploadDirectoryResourceAsync(IHazelcastClient client, long jobId, string resourceId, string path)
+    private static async Task UploadDirectoryResourceAsync(IHazelcastClient client, long jobId, string resourceId, string path)    
     {
         // prefix is f. for file, c. for class (see job repository)
         //var id = Path.GetFileName(path);
@@ -319,12 +274,13 @@ public class Program
 
         //Console.WriteLine($"upload {id} with key {key}");
 
-        using (var zipFile = new ZipFile())
-        {
-            zipFile.CompressionMethod = CompressionMethod.Deflate;
-            zipFile.AddDirectory(path);
-            zipFile.Save(zipPath);
-        }
+        // FIXME redo with non-IONIC
+        //using (var zipFile = new ZipFile())
+        //{
+        //    zipFile.CompressionMethod = CompressionMethod.Deflate;
+        //    zipFile.AddDirectory(path);
+        //    zipFile.Save(zipPath);
+        //}
 
         var logger = client.Options.LoggerFactory.CreateLogger("Program");
         try
@@ -338,6 +294,167 @@ public class Program
             File.Delete(zipPath);
         }
     }
+
+    private static async Task<object?> SendUserCode(GrpcCall call,
+        UserCodeClient client,
+        object input)
+    {
+        var payload = await client.ToByteArray(input);
+        var responsePayload = await SendUserCode(call, payload);
+        if (responsePayload == null) return null;
+        return await client.ToObject<object>(responsePayload);
+    }
+
+    private static async Task<bool> SendConnect(GrpcCall call,
+        string clusterName, string clusterAddress, string jobId, 
+        string? usercodeFile = null, string? usercodeType = null)
+    {
+        var connectArgs = $@"
+        {{
+            ""job"": {{
+                ""id"": ""{jobId}""
+            }},
+            ""cluster"": {{
+                ""name"": ""{clusterName}"",
+                ""address"": ""{clusterAddress}""
+            }},
+            ""usercode"": {{
+                {(usercodeFile == null ? "" : $"\"file\": \"{usercodeFile}\"")}
+                {(usercodeFile != null && usercodeType != null ? ", " : "")}
+                {(usercodeType == null ? "" : $"\"type\": \"{usercodeType}\"")}
+            }}
+        }}
+        ";
+
+        Console.WriteLine("--------");
+        Console.WriteLine("send: .CONNECT");
+        var copyMessage = new UserCodeMessage(call.MessageId.Next(), UserCodeMessageType.Connect, connectArgs);
+        await call.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
+        await call.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(GrpcTimeout);
+        var response = call.ResponseStream.Current.ToMessage();
+        if (response.IsError)
+        {
+            Console.WriteLine("error: " + response.PayloadString);
+            return false;
+        }
+
+        Console.WriteLine("success");
+        return true;
+    }
+
+    private static async Task<byte[]?> SendUserCode(GrpcCall call,
+        byte[] input)
+    {
+        Console.WriteLine("--------");
+        Console.WriteLine("send: .USER_CODE");
+        var copyMessage = new UserCodeMessage(call.MessageId.Next(), UserCodeMessageType.UserCode, input);
+        await call.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
+        await call.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(GrpcTimeout);
+        var response = call.ResponseStream.Current.ToMessage();
+        if (response.IsError)
+        {
+            Console.WriteLine("error: " + response.PayloadString);
+            return null;
+        }
+
+        Console.WriteLine("success");
+        return response.PayloadBytes;
+    }
+
+    private static async Task<bool> SendEnd(GrpcCall call)
+    {
+        Console.WriteLine("--------");
+        Console.WriteLine("send: .END");
+        var payload = Array.Empty<byte>();
+        var copyMessage = new UserCodeMessage(call.MessageId.Next(), UserCodeMessageType.End, payload);
+        await call.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
+        await call.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(GrpcTimeout);
+        var response = call.ResponseStream.Current.ToMessage();
+        if (response.IsError)
+        {
+            Console.WriteLine("error: " + response.PayloadString);
+            return false;
+        }
+
+        Console.WriteLine("success");
+        return true;
+    }
+
+    private static async Task<bool> SendCopyDirectory(GrpcCall call,
+        string path, string directory)
+    {
+        if (!Path.IsPathRooted(directory)) directory = Path.Combine(Directory.GetCurrentDirectory(), directory);
+        directory = Path.GetFullPath(directory);
+        if (!Directory.Exists(directory))
+        {
+            throw new Exception($"err: directory {directory} does not exist.");
+        }
+        var zipFile = Path.Join(Path.GetTempPath(), $"hz-zip-{Guid.NewGuid()}.zip");
+        ZipFile.CreateFromDirectory(directory, zipFile);
+        var success = await SendCopyZip(call, path, zipFile);
+        File.Delete(zipFile);
+        return success;
+    }
+
+    private static async Task<bool> SendCopy(GrpcCall call,
+        string resourcePath, byte[] bytes, bool zip, int chunkCount, int chunkNumber)
+    {
+        Console.WriteLine("--------");
+        Console.WriteLine($"send: .COPY{(zip ? "_ZIP" : "")} {chunkNumber+1}/{chunkCount}");
+        var fileObject = new FileObject {Path = resourcePath, Bytes = bytes, ChunkCount = chunkCount, ChunkNumber = chunkNumber};
+        var payload = fileObject.ToByteArray();
+        var copyMessage = new UserCodeMessage(call.MessageId.Next(), zip ? UserCodeMessageType.CopyZip : UserCodeMessageType.Copy, payload);
+        await call.RequestStream.WriteAsync(copyMessage.ToGrpcMessage());
+        await call.ResponseStream.MoveNext(CancellationToken.None).WaitAsync(GrpcTimeout);
+        var response = call.ResponseStream.Current.ToMessage();
+        if (response.IsError)
+        {
+            Console.WriteLine("error: " + response.PayloadString);
+            return false;
+        }
+
+        Console.WriteLine("success");
+        return true;
+    }
+
+    private static async Task<bool> SendCopy(GrpcCall call,
+        string resourcePath, string bytesPath, bool zip, int chunkSize)
+    {
+        var bytes = await File.ReadAllBytesAsync(bytesPath);
+        var len = bytes.Length;
+        var pos = 0;
+        var chunkCount = (int) Math.Ceiling( (double) len / chunkSize );
+        var chunkNumber = 0;
+        while (len > 0)
+        {
+            var size = len > chunkSize ? chunkSize : len;
+            var payload = new byte[size];
+            Array.Copy(bytes, pos, payload, 0, size);
+            if (!await SendCopy(call, resourcePath, payload, zip, chunkCount, chunkNumber++)) return false;
+            pos += chunkSize;
+            len -= chunkSize;
+        }
+        return true;
+    }
+
+    private static Task<bool> SendCopy(GrpcCall call,
+        string resourcePath, string bytesPath, int chunkSize = GrpcMessageMaxSize)
+    {
+        return SendCopy(call, resourcePath, bytesPath, false, chunkSize);
+    }
+
+    private static Task<bool> SendCopyZip(GrpcCall call,
+        string resourcePath, string bytesPath, int chunkSize = GrpcMessageMaxSize)
+    {
+        return SendCopy(call, resourcePath, bytesPath, true, chunkSize);
+    }
+}
+
+internal class MessageIdProvider
+{
+    private int _messageId;
+
+    public int Next() => _messageId++;
 }
 
 internal class MapOutputStream

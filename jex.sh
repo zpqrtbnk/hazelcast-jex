@@ -318,6 +318,10 @@ build_dk_controller () {(
 
     # local build
     docker build -t $DOCKER_REPOSITORY/runtime-controller:$VERSION .
+    if [ $? -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
 )}
 
 
@@ -326,6 +330,10 @@ build_cluster_os () {(
     cd hazelcast
 
     $MVN clean install -DskipTests -Dcheckstyle.skip=true
+    if [ $? -ne 0 ]; then
+        echo "ERR: Maven failed to build"
+        return 1
+    fi
 )}
 
 
@@ -379,6 +387,10 @@ __build_jobbuilder () { echo "Build the Jet JobBuilder project"; }
 function build_jobbuilder () {(
     cd hazelcast-usercode/java/jet-job-builder
     $MVN -nsu clean install
+    if [ $? -ne 0 ]; then
+        echo "ERR: Maven failed to build"
+        return 1
+    fi
 
     # merge into EE distribution
     cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar \
@@ -391,6 +403,10 @@ __build_jobbuilder_usercode () { echo "Build the UserCode JobBuilder project"; }
 build_jobbuilder_usercode () {(
     cd hazelcast-usercode/java/usercode-job-builder
     $MVN -nsu clean install
+    if [ $? -ne 0 ]; then
+        echo "ERR: Maven failed to build"
+        return 1
+    fi
 
     # merge into EE distribution
     cp $JEX/hazelcast-usercode/java/usercode-job-builder/target/hazelcast-usercode-jobbuilder-$HZVERSION.jar \
@@ -409,6 +425,17 @@ build_client_dotnet () {(
     pwsh ./hz.ps1 build,pack-nuget
     rm -rf ~/.nuget/packages/hazelcast.net
     rm -rf ~/.nuget/packages/hazelcast.net.*
+
+    rm -rf temp/publish >/dev/null 2>&1
+
+    # prepare for local use & tests
+    dotnet publish -c Release -a amd64 --no-restore --self-contained false \
+        -o temp/publish/amd64 \
+        src/Hazelcast.Net.UserCode.Server.Grpc/Hazelcast.Net.UserCode.Server.Grpc.csproj
+
+    #dotnet publish -c Release -a arm64 --no-restore --self-contained false \
+    #    -o temp/publish/amd64 \
+    #    src/Hazelcast.Net.UserCode.Server.Grpc/Hazelcast.Net.UserCode.Server.Grpc.csproj
 )}
 
 
@@ -508,8 +535,14 @@ build_dk_cluster_local () {
         --build-arg="HZVERSION=$HZVERSION" \
         $DOCKER_SOURCE
 
+    err=$?
     _dk_cluster_clear_image
-	
+
+    if [ $err -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
+
     docker tag $DOCKER_REPOSITORY/hazelcast:$HZVERSION $DOCKER_REPOSITORY/hazelcast:latest
     docker push $DOCKER_REPOSITORY/hazelcast:latest
 }
@@ -527,17 +560,28 @@ build_dk_cluster_quay () {(
     #IMAGE=quay.io/$QUAY_USER/hazelcast_dev:$CLUSTER_TAG
     IMAGE=quay.io/hazelcast_cloud/hazelcast-dev:$CLUSTER_TAG
 
-    _dk_cluster_prepare_image
-
     # build and push (need to do both at once due to multi-platform)
     docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
+    if [ $? -ne 0 ]; then
+        echo "ERR: Docker failed to login"
+        return 1
+    fi
+
+    _dk_cluster_prepare_image
+
     docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
         -t $IMAGE \
         -f dk8/hazelcast-ee.dockerfile \
         --build-arg="HZVERSION=$HZVERSION" \
         $DOCKER_SOURCE
+    err=$?
 
     _dk_cluster_clear_image
+    
+    if [ $err -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
 )}
 
 _dk_cluster_prepare_image () {
@@ -610,6 +654,10 @@ build_dk_runtime_python () {
         -t $IMAGE_SLIM \
         -f hazelcast-usercode/python/docker/slim.dockerfile \
         hazelcast-usercode/python
+    if [ $? -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
         
     # todo: build a ML image with way more dependencies
 
@@ -619,20 +667,59 @@ build_dk_runtime_python () {
         --build-arg="FROMIMAGE=$IMAGE_SLIM" \
         -f hazelcast-usercode/python/docker/slim+example.dockerfile \
         hazelcast-usercode/python/example
+    if [ $? -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
 }
 
 
 __build_dk_runtime_dotnet () { echo "Build the .NET runtime Docker images (gRPC)"; }
 build_dk_runtime_dotnet () {
 
-    # meh: build usercode vs usercode-base?
+    if [ -z "$1" ]; then
+        echo "err: missing registry"
+        return 1
+    fi
+    IMAGE_ROOT=$1
+    shift
 
-	docker build \
-		-t $DOCKER_REPOSITORY/dotnet-usercode:latest \
-		-f jobs/dotnet-container-grpc.dockerfile \
-		jex-dotnet/dotnet-grpc/publish/single-file/linux-x64
+    IMAGE_SLIM=$IMAGE_ROOT/usercode-dotnet-grpc-slim:latest
+    IMAGE_SLIM_EXAMPLE=$IMAGE_ROOT/usercode-dotnet-grpc-slim-example:latest
 
-    docker push $DOCKER_REPOSITORY/dotnet-usercode:latest 
+    # build and push images (need to do both at once due to multi-platorm)
+
+    # FIXME we need to copy different files for different platforms ?!!?
+    # OR we do it the .NET way = we build it all ?!!?
+    # note: cannot --load into docker, what about our local registry?
+    # ERROR: docker exporter does not currently support exporting manifest lists
+
+    # FIXME why is --no-cache required when stuff changes in the .NET client code?
+    # answer: it's not required, but we must PULL the images before running them locally
+    # or...?
+
+    # build the slim base image
+    docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+        --no-cache \
+        -t $IMAGE_SLIM \
+        -f hazelcast-usercode/dotnet/docker/slim-grpc.dockerfile \
+        --build-arg="SERVERPATH=hazelcast-csharp-client/temp/publish/" \
+        .
+    if [ $? -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
+        
+    # build the slim+example (contains usercode) image
+    # docker buildx build --builder viridian --platform linux/amd64,linux/arm64 --push \
+    #     -t $IMAGE_SLIM_EXAMPLE \
+    #     --build-arg="FROMIMAGE=$IMAGE_SLIM" \
+    #     -f hazelcast-usercode/dotnet/docker/slim-grpc+example.dockerfile \
+    #     .
+    # if [ $? -ne 0 ]; then
+    #     echo "ERR: Docker failed to build"
+    #     return 1
+    # fi
 }
 
 __dk_initialize () { echo "Initialize Docker (network, buildx...)"; }
@@ -710,6 +797,11 @@ __login_quay () { echo "Log into Quay and create the k8 secret"; }
 login_quay () {
 
     docker login -u $QUAY_USER -p $QUAY_PASSWORD quay.io
+    if [ $? -ne 0 ]; then
+        echo "ERR: Docker failed to build"
+        return 1
+    fi
+
     kubectl create secret generic quay-pull-secret \
         --from-file=.dockerconfigjson=$HOME/.docker/config.json \
         --type=kubernetes.io/dockerconfigjson
@@ -808,6 +900,10 @@ __build_jex_java () { echo "Build all the jex Java projects"; }
 build_jex_java () {(
 	cd jex-java/java-submit
 	$MVN -nsu clean package
+    if [ $? -ne 0 ]; then
+        echo "ERR: Maven failed to build"
+        return 1
+    fi
 )}
 
 
@@ -818,14 +914,16 @@ submit_java () {(
 
     if [ -z "$1" ]; then
         echo "err: missing config id"
-        return
+        echo "usage: <config-id> <image-base> [code,secrets]"
+        return 1
     fi
     CONFIG_ID=$1
     shift
 
     if [ -z "$1" ]; then
         echo "err: missing image base"
-        return
+        echo "usage: <config-id> <image-base> [code,secrets]"
+        return 1
     fi
     IMAGE_BASE=$1
     shift
@@ -861,12 +959,31 @@ submit_java () {(
     CLASSPATH="$TARGET/java-submit-1.0-SNAPSHOT.jar:$HZHOME/lib:$HZHOME/lib/*"
     CLCHOME=$($CLC home)
 
-    # using the base image + uploading the code, or
-    # if $2 is 'full', using the example full image which contains the code already
+    # submit a container-based job
     java -classpath $(_classpath $CLASSPATH) org.example.Submit \
         --secrets-path $CLCHOME/configs/$CONFIG_ID \
         --runtime-image $IMAGE \
         $CODE $SECRETS $REGAUTH
+
+    # a pass-through job
+    # remove --runtime-image $IMAGE
+    # replace with --runtime-address <address>:<port>
+
+    # a process-based job
+    # in venv mode, with venv in $JEX/temp/process-venv
+    # running in $JEX/hazelcast-usercode (must contain hazelcast_usercode and usercode=example)
+    # note: picocli wants that option values such as --code-path, which are also valid options,
+    #   are quote-escaped (see \") below else it assumes that the option has no value... :(
+    # java -classpath $(_classpath $CLASSPATH) org.example.Submit \
+    #     --secrets-path $CLCHOME/configs/local \
+    #     --process-work-directory=$JEX/hazelcast-usercode/python \
+    #     --process-name=python3 \
+    #     --process-arg="hazelcast_usercode" \
+    #     --process-arg="serve" \
+    #     --process-arg="--server-mode=venv" \
+    #     --process-arg="--venv-path=$JEX/temp" \
+    #     --process-arg="--venv-name=process-venv" \
+    #     --process-arg=\"--code-path=example\"
 )}
 
 
