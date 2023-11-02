@@ -382,36 +382,42 @@ EOF
 )}
 
 
-# build the Jet JobBuilder projet
-__build_jobbuilder () { echo "Build the Jet JobBuilder project"; }
-function build_jobbuilder () {(
-    cd hazelcast-usercode/java/jet-job-builder
-    $MVN -nsu clean install
-    if [ $? -ne 0 ]; then
-        echo "ERR: Maven failed to build"
-        return 1
-    fi
+# build the UserCode projects
+__build_usercode () { echo "Build the UserCode projects"; }
+build_usercode () {
+    (
+        cd hazelcast-usercode/java/jet-job-builder
+        $MVN -nsu clean install
+        if [ $? -ne 0 ]; then
+            echo "ERR: Maven failed to build"
+            return 1
+        fi
 
-    # merge into EE distribution
-    cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar \
-       $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
-)}
+        # merge into EE distribution
+        cp $JEX/hazelcast-usercode/java/jet-job-builder/target/hazelcast-jet-jobbuilder-$HZVERSION.jar \
+        $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+    )
+    (
+        cd hazelcast-usercode/java/usercode-job-builder
+        $MVN -nsu clean install
+        if [ $? -ne 0 ]; then
+            echo "ERR: Maven failed to build"
+            return 1
+        fi
 
-
-# build the UserCode JobBuilder project
-__build_jobbuilder_usercode () { echo "Build the UserCode JobBuilder project"; }
-build_jobbuilder_usercode () {(
-    cd hazelcast-usercode/java/usercode-job-builder
-    $MVN -nsu clean install
-    if [ $? -ne 0 ]; then
-        echo "ERR: Maven failed to build"
-        return 1
-    fi
-
-    # merge into EE distribution
-    cp $JEX/hazelcast-usercode/java/usercode-job-builder/target/hazelcast-usercode-jobbuilder-$HZVERSION.jar \
-       $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
-)}
+        # merge into EE distribution
+        cp $JEX/hazelcast-usercode/java/usercode-job-builder/target/hazelcast-usercode-jobbuilder-$HZVERSION.jar \
+        $JEX/hazelcast-enterprise/distribution/target/hazelcast-enterprise-$HZVERSION/lib 
+    )
+    (
+        cd hazelcast-usercode/dotnet/example
+        dotnet build
+        if [ $? -ne 0 ]; then
+            echo "ERR: DotNet failed to build"
+            return 1
+        fi
+    )
+}
 
 
 __build_client_dotnet () { echo "Build the .NET client project"; }
@@ -428,14 +434,15 @@ build_client_dotnet () {(
 
     rm -rf temp/publish >/dev/null 2>&1
 
-    # prepare for local use & tests
-    dotnet publish -c Release -a amd64 --no-restore --self-contained false \
-        -o temp/publish/amd64 \
-        src/Hazelcast.Net.UserCode.Server.Grpc/Hazelcast.Net.UserCode.Server.Grpc.csproj
+    # prepare for local use & tests - assuming local is amd64, change to arm64 for mac
+    # note: self-contained is false, we don't bundle the .NET runtime
+    # note: the docker images build happens in the Dockerfile and is different
+    ARCH=amd64
 
-    #dotnet publish -c Release -a arm64 --no-restore --self-contained false \
-    #    -o temp/publish/amd64 \
-    #    src/Hazelcast.Net.UserCode.Server.Grpc/Hazelcast.Net.UserCode.Server.Grpc.csproj
+    echo "PUBLISH grpc client executable for $ARCH"
+    dotnet publish -c Release -a $ARCH --no-restore --self-contained false \
+        -o $JEX/temp/publish/$ARCH \
+        src/Hazelcast.Net.UserCode.Server.Grpc/Hazelcast.Net.UserCode.Server.Grpc.csproj
 )}
 
 
@@ -452,30 +459,6 @@ function build_jex_dotnet () {(
 
     # build the dotnet jex code
     dotnet build
-
-    # publish the dotnet service for the platforms we want to support
-    # the project file specifies:
-    #   <PublishSingleFile>true</PublishSingleFile>
-    #   <PublishTrimmed>false</PublishTrimmed>
-    # and then we publish
-    #    publish/single-file/* which are single-file executables (but require that .NET is installed)
-    #    publish/self-contained/* which are self-contained executables (include .NET)
-    (
-        cd dotnet-shmem
-        rm -rf publish
-        for platform in win-x64 linux-x64 osx-arm64; do
-            dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
-            dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
-        done
-    )
-    (
-        cd dotnet-grpc
-        rm -rf publish
-        for platform in win-x64 linux-x64 osx-arm64; do
-            dotnet publish -c Release -r $platform -o publish/single-file/$platform --self-contained false
-            dotnet publish -c Release -r $platform -o publish/self-contained/$platform --self-contained true
-        done
-    )
 )}
 
 
@@ -910,11 +893,12 @@ build_jex_java () {(
 __submit_java () { echo "Submit job to cluster from Java"; }
 submit_java () {(
 
-    # args: <config-id> <image-base> [code,secrets]
+    # args: <config-id> <image-base> <lang> [code,secrets]
+    # where <lang> can be python, dotnet-grpc
 
     if [ -z "$1" ]; then
         echo "err: missing config id"
-        echo "usage: <config-id> <image-base> [code,secrets]"
+        echo "usage: <config-id> <image-base> <lang> [code,secrets]"
         return 1
     fi
     CONFIG_ID=$1
@@ -922,13 +906,21 @@ submit_java () {(
 
     if [ -z "$1" ]; then
         echo "err: missing image base"
-        echo "usage: <config-id> <image-base> [code,secrets]"
+        echo "usage: <config-id> <image-base> <lang> [code,secrets]"
         return 1
     fi
     IMAGE_BASE=$1
     shift
 
-    IMAGE="$IMAGE_BASE/usercode-python-slim-example:latest"
+    if [ -z "$1" ]; then
+        echo "err: missing language (python or dotnet)"
+        echo "usage: <config-id> <image-base> <lang> [code,secrets]"
+        return 1
+    fi
+    IMAGE_LANG=$1
+    shift
+
+    IMAGE="$IMAGE_BASE/usercode-$IMAGE_LANG-slim-example:latest"
     CODE=""
     SECRETS=""
 
@@ -936,7 +928,10 @@ submit_java () {(
         case $1 in
             code)
                 CODE="--code-path=$JEX/hazelcast-usercode/python/example"
-                IMAGE="$IMAGE_BASE/usercode-python-slim:latest"
+                if [ "$IMAGE_LANG" == "dotnet-grpc" ]; then
+                    CODE="--code-path=$JEX/hazelcast-usercode/dotnet/example/bin/Debug/net7.0"
+                fi
+                IMAGE="$IMAGE_BASE/usercode-$IMAGE_LANG-slim:latest"
                 shift
                 ;;
             secrets)

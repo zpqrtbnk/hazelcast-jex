@@ -31,7 +31,7 @@ public class Program
         public static GrpcCall Open(string address, GrpcChannelOptions options)
         {
             var channel = GrpcChannel.ForAddress(address, options);
-            var grpc = new Hazelcast.UserCode.ClientServer.Grpc.Proto.Server.ServerClient(channel);
+            var grpc = new Hazelcast.UserCode.ClientServer.Grpc.Proto.Transport.TransportClient(channel);
             var stream = grpc.invoke();
             return new GrpcCall(channel, stream);
         }
